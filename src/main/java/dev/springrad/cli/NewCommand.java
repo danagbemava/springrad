@@ -1,7 +1,10 @@
 package dev.springrad.cli;
 
 import dev.springrad.core.ProjectConfig;
-import dev.springrad.preset.Preset;
+import dev.springrad.core.ProjectGenerator;
+import dev.springrad.core.InitializrClient;
+import dev.springrad.core.SpringRadException;
+import dev.springrad.preset.PresetService;
 import dev.springrad.tui.SpringRadTuiApp;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -15,6 +18,17 @@ import java.util.concurrent.Callable;
 
 @Command(name = "new", description = "Generate a new Spring Boot project")
 public final class NewCommand implements Callable<Integer> {
+    private final PresetService presetService;
+    private final ProjectGenerator projectGenerator;
+
+    public NewCommand() {
+        this(new PresetService(), new InitializrClient());
+    }
+
+    NewCommand(PresetService presetService, ProjectGenerator projectGenerator) {
+        this.presetService = presetService;
+        this.projectGenerator = projectGenerator;
+    }
 
     @Spec
     private CommandSpec spec;
@@ -22,7 +36,7 @@ public final class NewCommand implements Callable<Integer> {
     @Parameters(index = "0", paramLabel = "<name>", description = "Project name")
     String name;
 
-    @Option(names = {"--interactive", "-i"}, description = "Start interactive TUI flow", defaultValue = "true")
+    @Option(names = {"--interactive", "-i"}, description = "Start interactive TUI flow", defaultValue = "false")
     boolean interactive;
 
     @Option(names = {"--preset", "-p"}, description = "Named preset to use")
@@ -55,6 +69,9 @@ public final class NewCommand implements Callable<Integer> {
     @Option(names = {"--output", "-o"}, description = "Output directory")
     Path outputDirectory;
 
+    @Option(names = {"--verbose", "-v"}, description = "Show full stack traces for errors")
+    boolean verbose;
+
     @Override
     public Integer call() {
         if (interactive) {
@@ -69,18 +86,22 @@ public final class NewCommand implements Callable<Integer> {
             return 1;
         }
 
-        CliArgs cliArgs = toCliArgs();
-        Preset preset = Preset.named(presetName);
-        ProjectConfig config = ProjectConfig.merge(preset, cliArgs);
-        spec.commandLine().getOut().printf(
-                "Resolved config: name=%s, group=%s, artifact=%s, build=%s, output=%s%n",
-                config.name(),
-                config.groupId(),
-                config.artifactId(),
-                config.buildTool().name().toLowerCase(),
-                config.outputDirectory()
-        );
-        return 0;
+        try {
+            CliArgs cliArgs = toCliArgs();
+            ProjectConfig config = presetService.resolve(presetName, cliArgs);
+            projectGenerator.generate(config);
+            spec.commandLine().getOut().printf("Project generated at %s%n", config.outputDirectory());
+            return 0;
+        } catch (SpringRadException e) {
+            spec.commandLine().getErr().println(e.getUserMessage());
+            if (verbose) {
+                e.printStackTrace(spec.commandLine().getErr());
+            }
+            return 1;
+        } catch (IllegalArgumentException e) {
+            spec.commandLine().getErr().println(e.getMessage());
+            return 1;
+        }
     }
 
     CliArgs toCliArgs() {

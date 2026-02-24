@@ -6,6 +6,7 @@ import java.util.List;
 
 public record Preset(
         String name,
+        boolean builtIn,
         String groupId,
         String javaVersion,
         String bootVersion,
@@ -19,6 +20,7 @@ public record Preset(
     public static Preset named(String name) {
         return new Preset(
                 name,
+                false,
                 null,
                 null,
                 null,

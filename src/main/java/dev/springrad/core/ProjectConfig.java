@@ -20,6 +20,8 @@ public record ProjectConfig(
         List<String> scaffolds,
         Path outputDirectory
 ) {
+    private static final DependencyAliasRegistry DEPENDENCY_ALIAS_REGISTRY = new DependencyAliasRegistry();
+
     public enum Packaging {jar, war}
     public enum BuildTool {gradle, maven}
     public enum AuthStyle {jwt, session, none}
@@ -44,7 +46,7 @@ public record ProjectConfig(
                 firstNonNull(args.buildTool(), preset.buildTool(), BuildTool.gradle),
                 firstNonNull(args.authStyle(), preset.authStyle(), AuthStyle.jwt),
                 firstNonNull(args.database(), preset.database(), Database.postgresql),
-                nonEmpty(args.dependencies(), preset.dependencies()),
+                DEPENDENCY_ALIAS_REGISTRY.resolveAll(nonEmpty(args.dependencies(), preset.dependencies())),
                 nonEmpty(args.scaffolds(), preset.scaffolds()),
                 output
         );

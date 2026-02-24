@@ -15,6 +15,7 @@ class ProjectConfigTest {
     void cliOverridesPreset() {
         Preset preset = new Preset(
                 "web-api",
+                false,
                 "com.preset",
                 "17",
                 "3.3.0",
@@ -53,6 +54,7 @@ class ProjectConfigTest {
     void presetUsedWhenCliNotProvided() {
         Preset preset = new Preset(
                 "web-api",
+                false,
                 "com.preset",
                 "21",
                 "3.4.0",
