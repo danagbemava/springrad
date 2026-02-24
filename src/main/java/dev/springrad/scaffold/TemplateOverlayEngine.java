@@ -342,6 +342,12 @@ public final class TemplateOverlayEngine {
         if ("BaseProducer.java".equals(fileName) && !config.dependencies().contains("kafka")) {
             return true;
         }
+        if ("BaseConsumer.java".equals(fileName) && !config.scaffolds().contains("BaseConsumer")) {
+            return true;
+        }
+        if ("BaseConsumer.java".equals(fileName) && !config.dependencies().contains("kafka")) {
+            return true;
+        }
         return false;
     }
 
