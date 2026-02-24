@@ -2,7 +2,6 @@ package dev.springrad.tui;
 
 import dev.springrad.cli.CliArgs;
 import dev.springrad.core.ProjectConfig;
-import dev.tamboui.backend.panama.PanamaBackendProvider;
 import dev.tamboui.style.Color;
 import dev.tamboui.toolkit.event.EventResult;
 import dev.tamboui.toolkit.app.ToolkitApp;
@@ -106,13 +105,7 @@ public class SpringRadTuiApp {
             ToolkitApp app = new ToolkitApp() {
                 @Override
                 protected TuiConfig configure() {
-                    try {
-                        return TuiConfig.builder()
-                                .backend(new PanamaBackendProvider().create())
-                                .build();
-                    } catch (IOException e) {
-                        throw new UncheckedIOException("Failed to initialize TamboUI backend", e);
-                    }
+                    return TuiRuntime.createConfig();
                 }
 
                 @Override
@@ -208,13 +201,7 @@ public class SpringRadTuiApp {
             ToolkitApp app = new ToolkitApp() {
                 @Override
                 protected TuiConfig configure() {
-                    try {
-                        return TuiConfig.builder()
-                                .backend(new PanamaBackendProvider().create())
-                                .build();
-                    } catch (IOException e) {
-                        throw new UncheckedIOException("Failed to initialize TamboUI backend", e);
-                    }
+                    return TuiRuntime.createConfig();
                 }
 
                 @Override

@@ -5,6 +5,60 @@ ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 GRADLEW="$ROOT_DIR/gradlew"
 DIST_BIN="$ROOT_DIR/build/install/springrad/bin/springrad"
 
+detect_java_major() {
+  local version_line
+  version_line="$("$1" -version 2>&1 | head -n1 || true)"
+  if [[ "$version_line" =~ \"([0-9]+) ]]; then
+    echo "${BASH_REMATCH[1]}"
+  else
+    echo "0"
+  fi
+}
+
+ensure_tui_java() {
+  local java_cmd major
+  if [[ -n "${JAVA_HOME:-}" ]]; then
+    java_cmd="$JAVA_HOME/bin/java"
+  else
+    java_cmd="$(command -v java || true)"
+  fi
+
+  if [[ -n "$java_cmd" && -x "$java_cmd" ]]; then
+    major="$(detect_java_major "$java_cmd")"
+  else
+    major="0"
+  fi
+
+  if (( major < 22 )); then
+    if [[ -x /usr/libexec/java_home ]]; then
+      local detected_home
+      detected_home="$(/usr/libexec/java_home -v 22+ 2>/dev/null || true)"
+      if [[ -n "$detected_home" ]]; then
+        export JAVA_HOME="$detected_home"
+      fi
+    fi
+  fi
+
+  if [[ -n "${JAVA_HOME:-}" && -x "$JAVA_HOME/bin/java" ]]; then
+    major="$(detect_java_major "$JAVA_HOME/bin/java")"
+  else
+    major="0"
+  fi
+
+  if (( major < 22 )); then
+    echo "TUI requires Java 22+."
+    echo "Set JAVA_HOME to a JDK 22 installation and retry."
+    echo "Example:"
+    echo "  JAVA_HOME=\$HOME/Library/Java/JavaVirtualMachines/azul-22.0.2/Contents/Home ./dev tui"
+    exit 1
+  fi
+
+  # TamboUI Panama backend requires native access to be enabled on JDK 22+.
+  if [[ "${JDK_JAVA_OPTIONS:-}" != *"--enable-native-access=ALL-UNNAMED"* ]]; then
+    export JDK_JAVA_OPTIONS="${JDK_JAVA_OPTIONS:+$JDK_JAVA_OPTIONS }--enable-native-access=ALL-UNNAMED"
+  fi
+}
+
 usage() {
   cat <<'EOF'
 springrad developer interface
@@ -38,6 +92,7 @@ run_dist() {
 }
 
 if [[ $# -eq 0 ]]; then
+  ensure_tui_java
   run_dist
   exit 0
 fi
@@ -47,6 +102,7 @@ shift
 
 case "$cmd" in
   tui)
+    ensure_tui_java
     run_dist
     ;;
   test)

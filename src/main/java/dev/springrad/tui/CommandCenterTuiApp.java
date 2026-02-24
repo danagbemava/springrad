@@ -1,6 +1,5 @@
 package dev.springrad.tui;
 
-import dev.tamboui.backend.panama.PanamaBackendProvider;
 import dev.tamboui.style.Color;
 import dev.tamboui.toolkit.app.ToolkitApp;
 import dev.tamboui.toolkit.element.Element;
@@ -8,8 +7,6 @@ import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.widgets.form.FieldType;
 import dev.tamboui.widgets.form.FormState;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -34,13 +31,7 @@ public final class CommandCenterTuiApp {
         ToolkitApp app = new ToolkitApp() {
             @Override
             protected TuiConfig configure() {
-                try {
-                    return TuiConfig.builder()
-                            .backend(new PanamaBackendProvider().create())
-                            .build();
-                } catch (IOException e) {
-                    throw new UncheckedIOException("Failed to initialize TamboUI backend", e);
-                }
+                return TuiRuntime.createConfig();
             }
 
             @Override

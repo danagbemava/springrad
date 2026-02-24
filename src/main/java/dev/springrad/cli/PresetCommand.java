@@ -24,6 +24,10 @@ public final class PresetCommand implements Runnable {
             spec.commandLine().usage(spec.commandLine().getOut());
             return;
         }
-        new PresetTuiApp().start();
+        try {
+            new PresetTuiApp().start();
+        } catch (IllegalStateException e) {
+            spec.commandLine().getErr().println(e.getMessage());
+        }
     }
 }

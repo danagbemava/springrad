@@ -4,7 +4,6 @@ import dev.springrad.core.ProjectConfig;
 import dev.springrad.preset.Preset;
 import dev.springrad.preset.PresetRepository;
 import dev.springrad.preset.PresetService;
-import dev.tamboui.backend.panama.PanamaBackendProvider;
 import dev.tamboui.style.Color;
 import dev.tamboui.toolkit.app.ToolkitApp;
 import dev.tamboui.toolkit.element.Element;
@@ -12,8 +11,6 @@ import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.widgets.form.FieldType;
 import dev.tamboui.widgets.form.FormState;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -62,13 +59,7 @@ public final class PresetTuiApp {
         ToolkitApp app = new ToolkitApp() {
             @Override
             protected TuiConfig configure() {
-                try {
-                    return TuiConfig.builder()
-                            .backend(new PanamaBackendProvider().create())
-                            .build();
-                } catch (IOException e) {
-                    throw new UncheckedIOException("Failed to initialize TamboUI backend", e);
-                }
+                return TuiRuntime.createConfig();
             }
 
             @Override

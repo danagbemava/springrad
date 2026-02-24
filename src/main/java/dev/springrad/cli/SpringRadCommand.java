@@ -29,12 +29,16 @@ public final class SpringRadCommand implements Runnable {
             return;
         }
 
-        CommandCenterTuiApp.Action action = new CommandCenterTuiApp().start();
-        switch (action) {
-            case generate_project -> spec.commandLine().execute("new", "springrad-app", "--interactive");
-            case manage_presets -> spec.commandLine().execute("preset");
-            case quit -> {
+        try {
+            CommandCenterTuiApp.Action action = new CommandCenterTuiApp().start();
+            switch (action) {
+                case generate_project -> spec.commandLine().execute("new", "springrad-app", "--interactive");
+                case manage_presets -> spec.commandLine().execute("preset");
+                case quit -> {
+                }
             }
+        } catch (IllegalStateException e) {
+            spec.commandLine().getErr().println(e.getMessage());
         }
     }
 
