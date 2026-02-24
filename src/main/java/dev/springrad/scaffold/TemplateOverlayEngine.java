@@ -306,6 +306,9 @@ public final class TemplateOverlayEngine {
         if ("JwtTokenProvider.java".equals(fileName) && !config.scaffolds().contains("JwtTokenProvider")) {
             return true;
         }
+        if ("ApiResponse.java".equals(fileName) && !config.scaffolds().contains("ApiResponse")) {
+            return true;
+        }
         return false;
     }
 

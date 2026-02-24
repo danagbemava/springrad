@@ -223,6 +223,38 @@ class TemplateOverlayEngineTest {
         assertFalse(Files.exists(outputNoScaffold.resolve("src/main/java/dev/example/demo/app/security/JwtTokenProvider.java")));
     }
 
+    @Test
+    void rendersApiResponseWhenScaffoldSelected() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/api"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/api/ApiResponse.java"),
+                "package {{packageName}}.api;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of("ApiResponse")), false);
+
+        assertTrue(Files.exists(output.resolve("src/main/java/dev/example/demo/app/api/ApiResponse.java")));
+    }
+
+    @Test
+    void skipsApiResponseWhenScaffoldNotSelected() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/api"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/api/ApiResponse.java"),
+                "package {{packageName}}.api;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of()), false);
+
+        assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/api/ApiResponse.java")));
+    }
+
     private static ProjectConfig config(Path output) {
         return config(output, ProjectConfig.AuthStyle.jwt, List.of());
     }
