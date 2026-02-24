@@ -30,6 +30,7 @@ dependencies {
     implementation("dev.tamboui:tamboui-panama-backend")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testImplementation("org.yaml:snakeyaml:2.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

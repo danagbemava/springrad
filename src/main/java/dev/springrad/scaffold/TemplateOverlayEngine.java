@@ -1,0 +1,223 @@
+package dev.springrad.scaffold;
+
+import dev.springrad.core.ProjectConfig;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Year;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Stream;
+
+public final class TemplateOverlayEngine {
+    private final Path filesystemTemplateRoot;
+    private final String classpathRoot;
+
+    public TemplateOverlayEngine() {
+        this.filesystemTemplateRoot = null;
+        this.classpathRoot = "templates";
+    }
+
+    TemplateOverlayEngine(Path filesystemTemplateRoot) {
+        this.filesystemTemplateRoot = filesystemTemplateRoot;
+        this.classpathRoot = null;
+    }
+
+    public void overlay(ProjectConfig config, boolean force) {
+        Objects.requireNonNull(config, "config");
+        try (ResolvedRoot resolvedRoot = resolveRoot()) {
+            applyFromRoot(resolvedRoot.path(), config.outputDirectory(), config, force);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to overlay templates", e);
+        }
+    }
+
+    private void applyFromRoot(Path root, Path targetRoot, ProjectConfig config, boolean force) throws IOException {
+        try (Stream<Path> stream = Files.walk(root)) {
+            stream.forEach(path -> {
+                try {
+                    Path relative = root.relativize(path);
+                    if (relative.toString().isEmpty()) {
+                        return;
+                    }
+                    Path target = targetRoot.resolve(relative.toString());
+                    if (Files.isDirectory(path)) {
+                        Files.createDirectories(target);
+                        return;
+                    }
+                    if (Files.exists(target) && !force) {
+                        return;
+                    }
+
+                    Files.createDirectories(target.getParent());
+                    byte[] input = Files.readAllBytes(path);
+                    if (isBinary(input)) {
+                        Files.write(target, input);
+                    } else {
+                        String rendered = render(new String(input, StandardCharsets.UTF_8), config);
+                        Files.writeString(target, rendered, StandardCharsets.UTF_8);
+                    }
+                } catch (IOException ex) {
+                    throw new IllegalStateException(ex);
+                }
+            });
+        } catch (IllegalStateException e) {
+            if (e.getCause() instanceof IOException ioException) {
+                throw ioException;
+            }
+            throw e;
+        }
+    }
+
+    String render(String content, ProjectConfig config) {
+        Map<String, String> values = placeholders(config);
+        String rendered = content;
+        for (Map.Entry<String, String> entry : values.entrySet()) {
+            rendered = rendered.replace("{{" + entry.getKey() + "}}", entry.getValue());
+        }
+        return rendered;
+    }
+
+    private Map<String, String> placeholders(ProjectConfig config) {
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("artifactId", config.artifactId());
+        values.put("groupId", config.groupId());
+        values.put("packageName", packageName(config.groupId(), config.artifactId()));
+        values.put("javaVersion", config.javaVersion());
+        values.put("bootVersion", config.bootVersion());
+        values.put("authStyle", config.authStyle().name());
+        values.put("database", config.database().name());
+        values.put("messaging", messaging(config));
+        values.put("year", String.valueOf(Year.now().getValue()));
+        values.put("datasourceUrl", datasourceUrl(config));
+        values.put("datasourceUsername", datasourceUsername(config.database()));
+        values.put("datasourcePassword", datasourcePassword(config.database()));
+        values.put("datasourceDriverClassName", datasourceDriver(config.database()));
+        values.put("messagingDevConfig", messagingDevConfig(config));
+        values.put("messagingProdConfig", messagingProdConfig(config));
+        values.put("jwtSecretConfig", jwtSecretConfig(config));
+        return values;
+    }
+
+    private static String packageName(String groupId, String artifactId) {
+        return groupId + "." + artifactId.replace('-', '.');
+    }
+
+    private static boolean isBinary(byte[] bytes) {
+        for (byte b : bytes) {
+            if (b == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String messaging(ProjectConfig config) {
+        if (config.dependencies().contains("kafka")) {
+            return "kafka";
+        }
+        if (config.dependencies().contains("amqp")) {
+            return "rabbit";
+        }
+        return "none";
+    }
+
+    private static String datasourceUrl(ProjectConfig config) {
+        return switch (config.database()) {
+            case postgresql -> "jdbc:postgresql://localhost:5432/" + config.artifactId() + "_dev";
+            case mysql -> "jdbc:mysql://localhost:3306/" + config.artifactId() + "_dev";
+            case h2 -> "jdbc:h2:mem:" + config.artifactId() + "_dev;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE";
+        };
+    }
+
+    private static String datasourceUsername(ProjectConfig.Database database) {
+        return switch (database) {
+            case postgresql -> "postgres";
+            case mysql -> "root";
+            case h2 -> "sa";
+        };
+    }
+
+    private static String datasourcePassword(ProjectConfig.Database database) {
+        return switch (database) {
+            case postgresql -> "postgres";
+            case mysql -> "root";
+            case h2 -> "";
+        };
+    }
+
+    private static String datasourceDriver(ProjectConfig.Database database) {
+        return switch (database) {
+            case postgresql -> "org.postgresql.Driver";
+            case mysql -> "com.mysql.cj.jdbc.Driver";
+            case h2 -> "org.h2.Driver";
+        };
+    }
+
+    private static String messagingDevConfig(ProjectConfig config) {
+        if (config.dependencies().contains("kafka")) {
+            return "  kafka:\n    bootstrap-servers: localhost:9092";
+        }
+        return "";
+    }
+
+    private static String messagingProdConfig(ProjectConfig config) {
+        if (config.dependencies().contains("kafka")) {
+            return "  kafka:\n    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}";
+        }
+        return "";
+    }
+
+    private static String jwtSecretConfig(ProjectConfig config) {
+        if (config.authStyle() == ProjectConfig.AuthStyle.jwt) {
+            return "  security:\n    jwt:\n      secret: ${JWT_SECRET}";
+        }
+        return "";
+    }
+
+    private ResolvedRoot resolveRoot() throws IOException {
+        if (filesystemTemplateRoot != null) {
+            return new ResolvedRoot(filesystemTemplateRoot, null);
+        }
+
+        try {
+            URI uri = Objects.requireNonNull(
+                    Thread.currentThread().getContextClassLoader().getResource(classpathRoot),
+                    "Template root not found on classpath: " + classpathRoot
+            ).toURI();
+            if ("jar".equals(uri.getScheme())) {
+                String raw = uri.toString();
+                String[] parts = raw.split("!");
+                URI jarUri = URI.create(parts[0]);
+                FileSystem fileSystem;
+                try {
+                    fileSystem = FileSystems.getFileSystem(jarUri);
+                    return new ResolvedRoot(fileSystem.getPath(parts[1]), null);
+                } catch (Exception e) {
+                    fileSystem = FileSystems.newFileSystem(jarUri, new HashMap<>());
+                    return new ResolvedRoot(fileSystem.getPath(parts[1]), fileSystem);
+                }
+            }
+            return new ResolvedRoot(Path.of(uri), null);
+        } catch (URISyntaxException e) {
+            throw new IOException("Invalid template classpath URI", e);
+        }
+    }
+
+    private record ResolvedRoot(Path path, FileSystem fsToClose) implements AutoCloseable {
+        @Override
+        public void close() throws IOException {
+            if (fsToClose != null && fsToClose.isOpen()) {
+                fsToClose.close();
+            }
+        }
+    }
+}
