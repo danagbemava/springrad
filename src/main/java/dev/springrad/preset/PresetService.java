@@ -66,7 +66,8 @@ public final class PresetService {
                                 "ApiResponse",
                                 "GlobalExceptionHandler",
                                 "OpenApiConfig",
-                                "AuditableEntity"
+                                "AuditableEntity",
+                                "FlywayInitMigration"
                         )
                 ),
                 new Preset(
@@ -86,6 +87,7 @@ public final class PresetService {
                                 "ApiResponse",
                                 "GlobalExceptionHandler",
                                 "AuditableEntity",
+                                "FlywayInitMigration",
                                 "BaseConsumer",
                                 "BaseProducer",
                                 "DeadLetterQueueConfig",

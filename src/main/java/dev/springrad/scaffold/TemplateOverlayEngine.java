@@ -318,6 +318,12 @@ public final class TemplateOverlayEngine {
         if ("AuditableEntity.java".equals(fileName) && !config.scaffolds().contains("AuditableEntity")) {
             return true;
         }
+        if ("V1__init.sql".equals(fileName) && !config.scaffolds().contains("FlywayInitMigration")) {
+            return true;
+        }
+        if ("V1__init.sql".equals(fileName) && !config.dependencies().contains("flyway")) {
+            return true;
+        }
         return false;
     }
 

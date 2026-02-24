@@ -351,11 +351,62 @@ class TemplateOverlayEngineTest {
         assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/domain/AuditableEntity.java")));
     }
 
+    @Test
+    void rendersFlywayMigrationWhenScaffoldSelectedAndDependencyPresent() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/resources/db/migration"));
+        Files.writeString(
+                templates.resolve("src/main/resources/db/migration/V1__init.sql"),
+                "CREATE TABLE demo (id BIGINT PRIMARY KEY);"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(
+                config(output, ProjectConfig.AuthStyle.jwt, List.of("FlywayInitMigration"), List.of("web", "flyway")),
+                false
+        );
+
+        assertTrue(Files.exists(output.resolve("src/main/resources/db/migration/V1__init.sql")));
+    }
+
+    @Test
+    void skipsFlywayMigrationWhenScaffoldMissingOrDependencyMissing() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/resources/db/migration"));
+        Files.writeString(
+                templates.resolve("src/main/resources/db/migration/V1__init.sql"),
+                "CREATE TABLE demo (id BIGINT PRIMARY KEY);"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+
+        Path outputMissingScaffold = tempDir.resolve("out-no-scaffold");
+        engine.overlay(config(outputMissingScaffold, ProjectConfig.AuthStyle.jwt, List.of(), List.of("web", "flyway")), false);
+        assertFalse(Files.exists(outputMissingScaffold.resolve("src/main/resources/db/migration/V1__init.sql")));
+
+        Path outputMissingDependency = tempDir.resolve("out-no-flyway");
+        engine.overlay(
+                config(outputMissingDependency, ProjectConfig.AuthStyle.jwt, List.of("FlywayInitMigration"), List.of("web")),
+                false
+        );
+        assertFalse(Files.exists(outputMissingDependency.resolve("src/main/resources/db/migration/V1__init.sql")));
+    }
+
     private static ProjectConfig config(Path output) {
         return config(output, ProjectConfig.AuthStyle.jwt, List.of());
     }
 
     private static ProjectConfig config(Path output, ProjectConfig.AuthStyle authStyle, List<String> scaffolds) {
+        return config(output, authStyle, scaffolds, List.of("web"));
+    }
+
+    private static ProjectConfig config(
+            Path output,
+            ProjectConfig.AuthStyle authStyle,
+            List<String> scaffolds,
+            List<String> dependencies
+    ) {
         return ProjectConfig.merge(
                 Preset.named("test"),
                 new CliArgs(
@@ -368,7 +419,7 @@ class TemplateOverlayEngineTest {
                         ProjectConfig.BuildTool.gradle,
                         authStyle,
                         ProjectConfig.Database.postgresql,
-                        List.of("web"),
+                        dependencies,
                         scaffolds,
                         output
                 )
