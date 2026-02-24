@@ -348,6 +348,12 @@ public final class TemplateOverlayEngine {
         if ("BaseConsumer.java".equals(fileName) && !config.dependencies().contains("kafka")) {
             return true;
         }
+        if ("RateLimitConfig.java".equals(fileName) && !config.scaffolds().contains("RateLimitingFilter")) {
+            return true;
+        }
+        if ("RateLimitingFilter.java".equals(fileName) && !config.scaffolds().contains("RateLimitingFilter")) {
+            return true;
+        }
         return false;
     }
 

@@ -561,6 +561,48 @@ class TemplateOverlayEngineTest {
         assertFalse(Files.exists(outputMissingDependency.resolve("src/main/java/dev/example/demo/app/messaging/BaseConsumer.java")));
     }
 
+    @Test
+    void rendersRateLimitTemplatesWhenScaffoldSelected() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/ratelimit"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/ratelimit/RateLimitConfig.java"),
+                "package {{packageName}}.ratelimit;"
+        );
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/ratelimit/RateLimitingFilter.java"),
+                "package {{packageName}}.ratelimit;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of("RateLimitingFilter"), List.of("web")), false);
+
+        assertTrue(Files.exists(output.resolve("src/main/java/dev/example/demo/app/ratelimit/RateLimitConfig.java")));
+        assertTrue(Files.exists(output.resolve("src/main/java/dev/example/demo/app/ratelimit/RateLimitingFilter.java")));
+    }
+
+    @Test
+    void skipsRateLimitTemplatesWhenScaffoldNotSelected() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/ratelimit"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/ratelimit/RateLimitConfig.java"),
+                "package {{packageName}}.ratelimit;"
+        );
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/ratelimit/RateLimitingFilter.java"),
+                "package {{packageName}}.ratelimit;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of(), List.of("web")), false);
+
+        assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/ratelimit/RateLimitConfig.java")));
+        assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/ratelimit/RateLimitingFilter.java")));
+    }
+
     private static ProjectConfig config(Path output) {
         return config(output, ProjectConfig.AuthStyle.jwt, List.of());
     }

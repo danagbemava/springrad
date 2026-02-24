@@ -58,7 +58,7 @@ public final class PresetService {
                         ProjectConfig.BuildTool.gradle,
                         ProjectConfig.AuthStyle.jwt,
                         ProjectConfig.Database.postgresql,
-                        List.of("web", "security", "data-jpa", "postgresql", "flyway", "actuator"),
+                        List.of("web", "security", "data-jpa", "postgresql", "flyway", "actuator", "rate-limit"),
                         List.of(
                                 "SecurityConfigJwt",
                                 "JwtTokenProvider",
@@ -67,6 +67,7 @@ public final class PresetService {
                                 "GlobalExceptionHandler",
                                 "OpenApiConfig",
                                 "AuditableEntity",
+                                "RateLimitingFilter",
                                 "FlywayInitMigration"
                         )
                 ),
