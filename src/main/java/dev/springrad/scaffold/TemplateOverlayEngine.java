@@ -324,6 +324,12 @@ public final class TemplateOverlayEngine {
         if ("V1__init.sql".equals(fileName) && !config.dependencies().contains("flyway")) {
             return true;
         }
+        if ("KafkaTopicConfig.java".equals(fileName) && !config.scaffolds().contains("KafkaTopicConfig")) {
+            return true;
+        }
+        if ("KafkaTopicConfig.java".equals(fileName) && !config.dependencies().contains("kafka")) {
+            return true;
+        }
         return false;
     }
 
