@@ -477,6 +477,48 @@ class TemplateOverlayEngineTest {
         assertFalse(Files.exists(outputMissingDependency.resolve("src/main/java/dev/example/demo/app/messaging/DeadLetterQueueConfig.java")));
     }
 
+    @Test
+    void rendersBaseProducerWhenScaffoldSelectedAndKafkaDependencyPresent() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/messaging"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/messaging/BaseProducer.java"),
+                "package {{packageName}}.messaging;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(
+                config(output, ProjectConfig.AuthStyle.jwt, List.of("BaseProducer"), List.of("web", "kafka")),
+                false
+        );
+
+        assertTrue(Files.exists(output.resolve("src/main/java/dev/example/demo/app/messaging/BaseProducer.java")));
+    }
+
+    @Test
+    void skipsBaseProducerWhenScaffoldMissingOrKafkaDependencyMissing() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/messaging"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/messaging/BaseProducer.java"),
+                "package {{packageName}}.messaging;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+
+        Path outputMissingScaffold = tempDir.resolve("out-no-scaffold");
+        engine.overlay(config(outputMissingScaffold, ProjectConfig.AuthStyle.jwt, List.of(), List.of("web", "kafka")), false);
+        assertFalse(Files.exists(outputMissingScaffold.resolve("src/main/java/dev/example/demo/app/messaging/BaseProducer.java")));
+
+        Path outputMissingDependency = tempDir.resolve("out-no-kafka");
+        engine.overlay(
+                config(outputMissingDependency, ProjectConfig.AuthStyle.jwt, List.of("BaseProducer"), List.of("web")),
+                false
+        );
+        assertFalse(Files.exists(outputMissingDependency.resolve("src/main/java/dev/example/demo/app/messaging/BaseProducer.java")));
+    }
+
     private static ProjectConfig config(Path output) {
         return config(output, ProjectConfig.AuthStyle.jwt, List.of());
     }
