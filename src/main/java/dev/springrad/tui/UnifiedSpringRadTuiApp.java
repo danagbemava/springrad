@@ -163,14 +163,15 @@ public final class UnifiedSpringRadTuiApp {
                         .arrowNavigation(true)
                         .onSubmit(submitted -> {
                             String action = submitted.selectValue("action");
-                            quitArmed.set(false);
                             switch (action) {
                                 case "generate_project" -> {
+                                    quitArmed.set(false);
                                     routeRef.set(AppRoute.project_wizard);
                                     store.dispatch(AppAction.navigate(AppRoute.project_wizard));
                                     store.dispatch(AppAction.setStatus("Project wizard"));
                                 }
                                 case "manage_presets" -> {
+                                    quitArmed.set(false);
                                     routeRef.set(AppRoute.preset_manager);
                                     store.dispatch(AppAction.navigate(AppRoute.preset_manager));
                                     store.dispatch(AppAction.setStatus("Preset manager"));
@@ -196,15 +197,20 @@ public final class UnifiedSpringRadTuiApp {
                 formRef[0] = actionForm;
 
                 Element body = column(
-                        text("  ____  ____  ____  _   _  ____  ____      _    ____").cyan(),
-                        text(" / ___||  _ \\|  _ \\| \\ | |/ ___||  _ \\    / \\  |  _ \\").cyan(),
-                        text(" \\___ \\| |_) | |_) |  \\| | |  _ | |_) |  / _ \\ | | | |").cyan(),
-                        text("  ___) |  __/|  _ <| |\\  | |_| ||  _ <  / ___ \\| |_| |").cyan(),
-                        text(" |____/|_|   |_| \\_\\_| \\_|\\____||_| \\_\\/_/   \\_\\____/").cyan(),
                         text(""),
-                        text("Generate projects and manage presets in one TUI flow.").white(),
+                        actionForm,
                         text(""),
-                        actionForm
+                        text("   _____            _               _____           _ ").cyan(),
+                        text("  / ____|          (_)             |  __ \\         | |").cyan(),
+                        text(" | (___  _ __  _ __ _ _ __   __ _  | |__) |__ _  __| |").cyan(),
+                        text("  \\___ \\| '_ \\| '__| | '_ \\ / _` | |  _  // _` |/ _` |").cyan(),
+                        text("  ____) | |_) | |  | | | | | (_| | | | \\ \\ (_| | (_| |").cyan(),
+                        text(" |_____/| .__/|_|  |_|_| |_|\\__, | |_|  \\_\\__,_|\\__,_|").cyan(),
+                        text("        | |                  __/ |                     ").cyan(),
+                        text("        |_|                 |___/                      ").cyan(),
+                        text(""),
+                        text("SpringRad generates production-ready Spring Boot projects and keeps").white(),
+                        text("project scaffolding and preset management in a single TUI workflow.").white()
                 ).spacing(1);
 
                 return AppShell.render(
