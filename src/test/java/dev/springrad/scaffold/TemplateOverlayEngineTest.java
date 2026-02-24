@@ -603,6 +603,40 @@ class TemplateOverlayEngineTest {
         assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/ratelimit/RateLimitingFilter.java")));
     }
 
+    @Test
+    void rendersLogbackJsonConfigWhenScaffoldSelected() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/resources"));
+        Files.writeString(
+                templates.resolve("src/main/resources/logback-spring.xml"),
+                "<configuration><property name=\"app\" value=\"{{artifactId}}\"/></configuration>"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of("LogbackJsonConfig"), List.of("web")), false);
+
+        Path target = output.resolve("src/main/resources/logback-spring.xml");
+        assertTrue(Files.exists(target));
+        assertTrue(Files.readString(target).contains("demo-app"));
+    }
+
+    @Test
+    void skipsLogbackJsonConfigWhenScaffoldNotSelected() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/resources"));
+        Files.writeString(
+                templates.resolve("src/main/resources/logback-spring.xml"),
+                "<configuration/>"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of(), List.of("web")), false);
+
+        assertFalse(Files.exists(output.resolve("src/main/resources/logback-spring.xml")));
+    }
+
     private static ProjectConfig config(Path output) {
         return config(output, ProjectConfig.AuthStyle.jwt, List.of());
     }

@@ -68,6 +68,7 @@ public final class PresetService {
                                 "OpenApiConfig",
                                 "AuditableEntity",
                                 "RateLimitingFilter",
+                                "LogbackJsonConfig",
                                 "FlywayInitMigration"
                         )
                 ),
@@ -89,6 +90,7 @@ public final class PresetService {
                                 "GlobalExceptionHandler",
                                 "AuditableEntity",
                                 "FlywayInitMigration",
+                                "LogbackJsonConfig",
                                 "BaseConsumer",
                                 "BaseProducer",
                                 "DeadLetterQueueConfig",

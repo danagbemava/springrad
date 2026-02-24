@@ -354,6 +354,9 @@ public final class TemplateOverlayEngine {
         if ("RateLimitingFilter.java".equals(fileName) && !config.scaffolds().contains("RateLimitingFilter")) {
             return true;
         }
+        if ("logback-spring.xml".equals(fileName) && !config.scaffolds().contains("LogbackJsonConfig")) {
+            return true;
+        }
         return false;
     }
 
