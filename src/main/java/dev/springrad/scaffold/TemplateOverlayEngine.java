@@ -178,7 +178,7 @@ public final class TemplateOverlayEngine {
 
     private static String jwtSecretConfig(ProjectConfig config) {
         if (config.authStyle() == ProjectConfig.AuthStyle.jwt) {
-            return "  security:\n    jwt:\n      secret: ${JWT_SECRET}";
+            return "app:\n  security:\n    jwt:\n      secret: ${JWT_SECRET}";
         }
         return "";
     }
