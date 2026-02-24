@@ -309,6 +309,9 @@ public final class TemplateOverlayEngine {
         if ("ApiResponse.java".equals(fileName) && !config.scaffolds().contains("ApiResponse")) {
             return true;
         }
+        if ("GlobalExceptionHandler.java".equals(fileName) && !config.scaffolds().contains("GlobalExceptionHandler")) {
+            return true;
+        }
         return false;
     }
 

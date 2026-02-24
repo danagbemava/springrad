@@ -50,7 +50,14 @@ public final class PresetService {
                         ProjectConfig.AuthStyle.jwt,
                         ProjectConfig.Database.postgresql,
                         List.of("web", "security", "data-jpa", "postgresql", "flyway", "actuator"),
-                        List.of("SecurityConfigJwt", "AuthController", "GlobalExceptionHandler", "OpenApiConfig")
+                        List.of(
+                                "SecurityConfigJwt",
+                                "JwtTokenProvider",
+                                "AuthController",
+                                "ApiResponse",
+                                "GlobalExceptionHandler",
+                                "OpenApiConfig"
+                        )
                 ),
                 new Preset(
                         "event-driven",
@@ -63,7 +70,16 @@ public final class PresetService {
                         ProjectConfig.AuthStyle.jwt,
                         ProjectConfig.Database.postgresql,
                         List.of("web", "kafka", "security", "data-jpa", "postgresql", "flyway", "actuator"),
-                        List.of("BaseConsumer", "BaseProducer", "DeadLetterQueueConfig", "KafkaTopicConfig")
+                        List.of(
+                                "SecurityConfigJwt",
+                                "JwtTokenProvider",
+                                "ApiResponse",
+                                "GlobalExceptionHandler",
+                                "BaseConsumer",
+                                "BaseProducer",
+                                "DeadLetterQueueConfig",
+                                "KafkaTopicConfig"
+                        )
                 )
         );
     }
