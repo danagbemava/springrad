@@ -48,6 +48,9 @@ public final class TemplateOverlayEngine {
                     if (relative.toString().isEmpty()) {
                         return;
                     }
+                    if (shouldSkipTemplate(relative, config)) {
+                        return;
+                    }
                     Path target = targetRoot.resolve(relative.toString());
                     if (Files.isDirectory(path)) {
                         Files.createDirectories(target);
@@ -106,6 +109,9 @@ public final class TemplateOverlayEngine {
         values.put("jwtSecretConfig", jwtSecretConfig(config));
         values.put("envJwtSection", envJwtSection(config));
         values.put("envMessagingSection", envMessagingSection(config));
+        values.put("composeAppDependsOn", composeAppDependsOn(config));
+        values.put("composeDbService", composeDbService(config));
+        values.put("composeVolumesSection", composeVolumesSection(config));
         return values;
     }
 
@@ -206,6 +212,78 @@ public final class TemplateOverlayEngine {
                     """;
         }
         return "";
+    }
+
+    private static String composeAppDependsOn(ProjectConfig config) {
+        if (config.database() == ProjectConfig.Database.h2) {
+            return "";
+        }
+        return """
+                    depends_on:
+                      db:
+                        condition: service_healthy
+                """;
+    }
+
+    private static String composeDbService(ProjectConfig config) {
+        return switch (config.database()) {
+            case postgresql -> """
+                db:
+                  image: postgres:16-alpine
+                  container_name: %s-db
+                  ports:
+                    - "5432:5432"
+                  environment:
+                    POSTGRES_DB: %s_dev
+                    POSTGRES_USER: postgres
+                    POSTGRES_PASSWORD: postgres
+                  healthcheck:
+                    test: ["CMD-SHELL", "pg_isready -U postgres"]
+                    interval: 10s
+                    timeout: 5s
+                    retries: 5
+                  volumes:
+                    - %s-db-data:/var/lib/postgresql/data
+                """.formatted(config.artifactId(), config.artifactId(), config.artifactId());
+            case mysql -> """
+                db:
+                  image: mysql:8-alpine
+                  container_name: %s-db
+                  ports:
+                    - "3306:3306"
+                  environment:
+                    MYSQL_DATABASE: %s_dev
+                    MYSQL_USER: root
+                    MYSQL_PASSWORD: root
+                    MYSQL_ROOT_PASSWORD: root
+                  healthcheck:
+                    test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot"]
+                    interval: 10s
+                    timeout: 5s
+                    retries: 5
+                  volumes:
+                    - %s-db-data:/var/lib/mysql
+                """.formatted(config.artifactId(), config.artifactId(), config.artifactId());
+            case h2 -> "";
+        };
+    }
+
+    private static String composeVolumesSection(ProjectConfig config) {
+        if (config.database() == ProjectConfig.Database.h2) {
+            return "";
+        }
+        return """
+                volumes:
+                  %s-db-data:
+                """.formatted(config.artifactId());
+    }
+
+    private static boolean shouldSkipTemplate(Path relative, ProjectConfig config) {
+        String fileName = relative.getFileName().toString();
+        if ("docker-compose.kafka.yml".equals(fileName) && !config.dependencies().contains("kafka")) {
+            return true;
+        }
+        return false;
     }
 
     private ResolvedRoot resolveRoot() throws IOException {
