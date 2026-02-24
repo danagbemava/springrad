@@ -56,6 +56,17 @@ public final class DependencyAliasRegistry {
         map.put("docs", List.of("springdoc"));
         map.put("web", List.of("web"));
         map.put("rate-limit", List.of("cache"));
+
+        // Pass-through aliases for raw Spring Initializr dependency IDs we use directly.
+        map.put("data-jpa", List.of("data-jpa"));
+        map.put("postgresql", List.of("postgresql"));
+        map.put("mysql", List.of("mysql"));
+        map.put("h2", List.of("h2"));
+        map.put("flyway", List.of("flyway"));
+        map.put("liquibase", List.of("liquibase"));
+        map.put("actuator", List.of("actuator"));
+        map.put("prometheus", List.of("prometheus"));
+        map.put("amqp", List.of("amqp"));
         return map;
     }
 }

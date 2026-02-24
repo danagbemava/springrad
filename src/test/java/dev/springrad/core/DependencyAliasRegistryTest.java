@@ -56,6 +56,25 @@ class DependencyAliasRegistryTest {
         }
     }
 
+    @Test
+    void knownInitializrIdsDoNotLogWarnings() {
+        DependencyAliasRegistry registry = new DependencyAliasRegistry();
+        Logger logger = Logger.getLogger(DependencyAliasRegistry.class.getName());
+        CapturingHandler handler = new CapturingHandler();
+        logger.addHandler(handler);
+        logger.setUseParentHandlers(false);
+        try {
+            List<String> resolved = registry.resolveAll(List.of(
+                    "web", "security", "data-jpa", "postgresql", "flyway", "actuator"
+            ));
+            assertEquals(List.of("web", "security", "data-jpa", "postgresql", "flyway", "actuator"), resolved);
+            assertTrue(handler.messages.isEmpty(), "Expected no warnings for known Initializr IDs");
+        } finally {
+            logger.removeHandler(handler);
+            logger.setUseParentHandlers(true);
+        }
+    }
+
     private static final class CapturingHandler extends Handler {
         private final List<String> messages = new ArrayList<>();
 
