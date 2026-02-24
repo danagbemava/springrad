@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 public final class TemplateOverlayEngine {
@@ -32,15 +33,27 @@ public final class TemplateOverlayEngine {
     }
 
     public void overlay(ProjectConfig config, boolean force) {
+        overlay(config, force, ignored -> {
+        });
+    }
+
+    public void overlay(ProjectConfig config, boolean force, Consumer<String> progress) {
         Objects.requireNonNull(config, "config");
+        Objects.requireNonNull(progress, "progress");
         try (ResolvedRoot resolvedRoot = resolveRoot()) {
-            applyFromRoot(resolvedRoot.path(), config.outputDirectory(), config, force);
+            applyFromRoot(resolvedRoot.path(), config.outputDirectory(), config, force, progress);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to overlay templates", e);
         }
     }
 
-    private void applyFromRoot(Path root, Path targetRoot, ProjectConfig config, boolean force) throws IOException {
+    private void applyFromRoot(
+            Path root,
+            Path targetRoot,
+            ProjectConfig config,
+            boolean force,
+            Consumer<String> progress
+    ) throws IOException {
         try (Stream<Path> stream = Files.walk(root)) {
             stream.forEach(path -> {
                 try {
@@ -49,6 +62,9 @@ public final class TemplateOverlayEngine {
                         return;
                     }
                     if (shouldSkipTemplate(relative, config)) {
+                        if (!Files.isDirectory(path)) {
+                            progress.accept("Skipping template: " + relative);
+                        }
                         return;
                     }
                     String renderedRelative = renderPath(relative, config);
@@ -58,6 +74,7 @@ public final class TemplateOverlayEngine {
                         return;
                     }
                     if (Files.exists(target) && !force) {
+                        progress.accept("Keeping existing file: " + renderedRelative);
                         return;
                     }
 
@@ -69,6 +86,7 @@ public final class TemplateOverlayEngine {
                         String rendered = render(new String(input, StandardCharsets.UTF_8), config);
                         Files.writeString(target, rendered, StandardCharsets.UTF_8);
                     }
+                    progress.accept("Wrote file: " + renderedRelative);
                 } catch (IOException ex) {
                     throw new IllegalStateException(ex);
                 }

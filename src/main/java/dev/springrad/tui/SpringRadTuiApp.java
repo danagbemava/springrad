@@ -4,6 +4,7 @@ import dev.springrad.cli.CliArgs;
 import dev.springrad.core.ProjectConfig;
 import dev.tamboui.backend.panama.PanamaBackendProvider;
 import dev.tamboui.style.Color;
+import dev.tamboui.toolkit.event.EventResult;
 import dev.tamboui.toolkit.app.ToolkitApp;
 import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.toolkit.elements.FormElement;
@@ -19,7 +20,6 @@ import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -60,6 +60,9 @@ public class SpringRadTuiApp {
 
     public interface ProgressReporter {
         void step(int currentStep, int totalSteps, String message);
+
+        default void detail(String message) {
+        }
     }
 
     @FunctionalInterface
@@ -196,6 +199,7 @@ public class SpringRadTuiApp {
             AtomicReference<String> statusText = new AtomicReference<>("Running...");
             AtomicReference<Integer> currentStep = new AtomicReference<>(0);
             AtomicReference<Integer> totalSteps = new AtomicReference<>(0);
+            AtomicReference<Boolean> awaitingConfirmation = new AtomicReference<>(false);
             List<String> logs = Collections.synchronizedList(new ArrayList<>());
 
             ToolkitApp app = new ToolkitApp() {
@@ -214,22 +218,34 @@ public class SpringRadTuiApp {
                 protected void onStart() {
                     Thread worker = new Thread(() -> {
                         try {
-                            T result = task.run((step, total, message) -> runner().runOnRenderThread(() -> {
-                                currentStep.set(step);
-                                totalSteps.set(total);
-                                currentStepText.set(message);
-                                logs.add("[%d/%d] %s".formatted(step, total, message));
-                            }));
+                            T result = task.run(new ProgressReporter() {
+                                @Override
+                                public void step(int step, int total, String message) {
+                                    runner().runOnRenderThread(() -> {
+                                        currentStep.set(step);
+                                        totalSteps.set(total);
+                                        currentStepText.set(message);
+                                        logs.add("[%d/%d] %s".formatted(step, total, message));
+                                    });
+                                }
+
+                                @Override
+                                public void detail(String message) {
+                                    runner().runOnRenderThread(() -> logs.add("  - " + message));
+                                }
+                            });
                             resultRef.set(result);
-                            runner().runOnRenderThread(() -> statusText.set("Completed"));
+                            runner().runOnRenderThread(() -> {
+                                statusText.set("Completed (press ENTER to close)");
+                                awaitingConfirmation.set(true);
+                            });
                         } catch (Exception e) {
                             failureRef.set(e);
                             runner().runOnRenderThread(() -> {
-                                statusText.set("Failed");
+                                statusText.set("Failed (press ENTER to close)");
                                 logs.add("Error: " + e.getMessage());
+                                awaitingConfirmation.set(true);
                             });
-                        } finally {
-                            runner().schedule(this::quit, Duration.ofMillis(700));
                         }
                     }, "springrad-tui-progress-worker");
                     worker.setDaemon(true);
@@ -256,17 +272,27 @@ public class SpringRadTuiApp {
                     return column(
                             panel(" " + title + " ",
                                     text("SpringRad execution progress").bold().white(),
-                                    text("Updates refresh as each generation step finishes").cyan()
+                                    text("Updates refresh for each sub-step and file operation").cyan()
                             ).doubleBorder().borderColor(Color.CYAN).padding(1),
                             panel(" Current Step ",
                                     text("Step: " + (total == 0 ? "-" : (step + "/" + total))).yellow(),
                                     text(stepText).white(),
-                                    text("Status: " + statusText.get()).green()
+                                    text("Status: " + statusText.get()).green(),
+                                    text(awaitingConfirmation.get() ? "Confirm exit: press ENTER" : "Please wait...").gray()
                             ).rounded().borderColor(Color.LIGHT_BLUE).padding(1),
                             panel(" Activity Log ",
                                     column(logItems.toArray(new Element[0])).spacing(0)
                             ).rounded().borderColor(Color.LIGHT_MAGENTA).padding(1)
-                    ).spacing(1);
+                    )
+                            .spacing(1)
+                            .focusable(true)
+                            .onKeyEvent(event -> {
+                                if (awaitingConfirmation.get() && event.isConfirm()) {
+                                    quit();
+                                    return EventResult.HANDLED;
+                                }
+                                return EventResult.UNHANDLED;
+                            });
                 }
             };
 
@@ -411,7 +437,17 @@ public class SpringRadTuiApp {
 
         @Override
         public <T> T runWithProgress(String title, ProgressTask<T> task) throws Exception {
-            return task.run((currentStep, totalSteps, message) -> out.printf("[%d/%d] %s%n", currentStep, totalSteps, message));
+            return task.run(new ProgressReporter() {
+                @Override
+                public void step(int currentStep, int totalSteps, String message) {
+                    out.printf("[%d/%d] %s%n", currentStep, totalSteps, message);
+                }
+
+                @Override
+                public void detail(String message) {
+                    out.printf("  - %s%n", message);
+                }
+            });
         }
 
         private String pickPreset(List<String> presets) {

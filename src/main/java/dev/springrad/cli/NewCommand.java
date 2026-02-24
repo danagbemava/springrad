@@ -136,8 +136,17 @@ public final class NewCommand implements Callable<Integer> {
                 config = executeGenerationFlow(
                         finalPresetName,
                         finalCliArgs,
-                        (currentStep, totalSteps, message) ->
-                                spec.commandLine().getOut().printf("[%d/%d] %s%n", currentStep, totalSteps, message)
+                        new SpringRadTuiApp.ProgressReporter() {
+                            @Override
+                            public void step(int currentStep, int totalSteps, String message) {
+                                spec.commandLine().getOut().printf("[%d/%d] %s%n", currentStep, totalSteps, message);
+                            }
+
+                            @Override
+                            public void detail(String message) {
+                                spec.commandLine().getOut().printf("  - %s%n", message);
+                            }
+                        }
                 );
             }
             spec.commandLine().getOut().printf("Project generated at %s%n", config.outputDirectory());
@@ -166,18 +175,23 @@ public final class NewCommand implements Callable<Integer> {
             SpringRadTuiApp.ProgressReporter reporter
     ) {
         reporter.step(1, 5, "Resolving preset and configuration");
+        reporter.detail("Preset selected: " + resolvedPresetName);
         ProjectConfig config = presetService.resolve(resolvedPresetName, cliArgs);
+        reporter.detail("Output directory: " + config.outputDirectory());
 
         reporter.step(2, 5, "Generating base Spring project from Initializr");
         projectGenerator.generate(config);
+        reporter.detail("Initializr generation completed");
 
         reporter.step(3, 5, "Applying template overlays and scaffolds");
-        templateOverlayEngine.overlay(config, false);
+        templateOverlayEngine.overlay(config, false, reporter::detail);
 
         reporter.step(4, 5, "Initializing git repository");
         gitInitializer.initializeRepository(config.outputDirectory(), spec.commandLine().getErr());
+        reporter.detail("Git initialization complete");
 
         reporter.step(5, 5, "Finalizing output");
+        reporter.detail("Generation flow complete");
         return config;
     }
 
