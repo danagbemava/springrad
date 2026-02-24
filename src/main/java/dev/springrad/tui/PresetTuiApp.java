@@ -27,6 +27,7 @@ import static dev.tamboui.toolkit.Toolkit.text;
 public final class PresetTuiApp {
     private final PresetRepository repository;
     private final PresetService presetService;
+    private final ActivityLogStore activityLogStore;
 
     public PresetTuiApp() {
         this(new PresetRepository());
@@ -35,6 +36,7 @@ public final class PresetTuiApp {
     PresetTuiApp(PresetRepository repository) {
         this.repository = repository;
         this.presetService = new PresetService(repository);
+        this.activityLogStore = new ActivityLogStore();
     }
 
     public void start() {
@@ -52,7 +54,11 @@ public final class PresetTuiApp {
                 .selectField("packaging", List.of("jar", "war"), 0)
                 .build();
 
-        List<String> activity = new ArrayList<>();
+        List<String> activity = new ArrayList<>(activityLogStore.tail(20));
+        if (activity.isEmpty()) {
+            activity.add("Preset manager started.");
+            activityLogStore.append("Preset manager started.");
+        }
         ToolkitApp app = new ToolkitApp() {
             @Override
             protected TuiConfig configure() {
@@ -92,16 +98,20 @@ public final class PresetTuiApp {
                                     List<Preset> presets = repository.findAll();
                                     if (presets.isEmpty()) {
                                         activity.add("No presets found.");
+                                        activityLogStore.append("No presets found.");
                                     } else {
                                         activity.add("Presets:");
+                                        activityLogStore.append("Listing presets.");
                                         for (Preset preset : presets) {
-                                            activity.add("- %s%s (%s/%s) deps=%s".formatted(
+                                            String row = "- %s%s (%s/%s) deps=%s".formatted(
                                                     preset.name(),
                                                     preset.builtIn() ? " [built-in]" : "",
                                                     preset.authStyle(),
                                                     preset.database(),
                                                     String.join(",", preset.dependencies())
-                                            ));
+                                            );
+                                            activity.add(row);
+                                            activityLogStore.append(row);
                                         }
                                     }
                                 }
@@ -109,11 +119,13 @@ public final class PresetTuiApp {
                                     String name = submitted.textValue("name");
                                     if (name == null || name.isBlank()) {
                                         activity.add("Cannot save: preset name is required.");
+                                        activityLogStore.append("Cannot save preset: missing name.");
                                         return;
                                     }
                                     Preset existing = repository.findByName(name).orElse(null);
                                     if (existing != null && existing.builtIn()) {
                                         activity.add("Cannot overwrite built-in preset: " + name);
+                                        activityLogStore.append("Cannot overwrite built-in preset: " + name);
                                         return;
                                     }
                                     Preset preset = new Preset(
@@ -131,21 +143,31 @@ public final class PresetTuiApp {
                                     );
                                     repository.save(preset);
                                     activity.add("Saved preset: " + preset.name());
+                                    activityLogStore.append("Saved preset: " + preset.name());
                                 }
                                 case "delete" -> {
                                     String name = submitted.textValue("name");
                                     if (name == null || name.isBlank()) {
                                         activity.add("Cannot delete: preset name is required.");
+                                        activityLogStore.append("Cannot delete preset: missing name.");
                                         return;
                                     }
                                     if (repository.delete(name.trim())) {
                                         activity.add("Deleted preset: " + name.trim());
+                                        activityLogStore.append("Deleted preset: " + name.trim());
                                     } else {
                                         activity.add("Delete failed (not found or built-in): " + name.trim());
+                                        activityLogStore.append("Delete failed (not found or built-in): " + name.trim());
                                     }
                                 }
-                                case "quit" -> quit();
-                                default -> activity.add("Unknown action: " + action);
+                                case "quit" -> {
+                                    activityLogStore.append("Preset manager exited by user.");
+                                    quit();
+                                }
+                                default -> {
+                                    activity.add("Unknown action: " + action);
+                                    activityLogStore.append("Unknown preset action: " + action);
+                                }
                             }
                         });
 

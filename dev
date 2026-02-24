@@ -10,6 +10,7 @@ usage() {
 springrad developer interface
 
 Usage:
+  ./dev tui
   ./dev test [-- <gradle test args>]
   ./dev dist
   ./dev run -- <springrad args>
@@ -18,6 +19,7 @@ Usage:
   ./dev clean
 
 Examples:
+  ./dev tui
   ./dev test
   ./dev run -- new demo-app --preset web-api --output ./demo-app
   ./dev run -- new demo-app -i
@@ -36,14 +38,17 @@ run_dist() {
 }
 
 if [[ $# -eq 0 ]]; then
-  usage
-  exit 1
+  run_dist
+  exit 0
 fi
 
 cmd="$1"
 shift
 
 case "$cmd" in
+  tui)
+    run_dist
+    ;;
   test)
     if [[ "${1:-}" == "--" ]]; then
       shift

@@ -35,7 +35,7 @@ Test execution generates JaCoCo coverage reports at:
 Launch TUI command center:
 
 ```bash
-./dev run -- 
+./dev tui
 ```
 
 Or directly:
@@ -43,6 +43,8 @@ Or directly:
 ```bash
 ./build/install/springrad/bin/springrad
 ```
+
+`./dev` with no arguments also launches the TUI command center.
 
 Build the local distribution explicitly:
 
@@ -107,6 +109,10 @@ Delete a preset:
 Preset storage location:
 
 - `~/.springrad/presets.json`
+
+Activity log history location:
+
+- `~/.springrad/activity.log`
 
 ## Notes
 

@@ -77,6 +77,8 @@ public class SpringRadTuiApp {
     }
 
     private static final class TamboUiBackend implements Backend {
+        private final ActivityLogStore activityLogStore = new ActivityLogStore();
+
         @Override
         public InteractiveSelection start(String initialName, List<String> availablePresets) {
             if (availablePresets == null || availablePresets.isEmpty()) {
@@ -201,6 +203,7 @@ public class SpringRadTuiApp {
             AtomicReference<Integer> totalSteps = new AtomicReference<>(0);
             AtomicReference<Boolean> awaitingConfirmation = new AtomicReference<>(false);
             List<String> logs = Collections.synchronizedList(new ArrayList<>());
+            logs.addAll(activityLogStore.tail(20));
 
             ToolkitApp app = new ToolkitApp() {
                 @Override
@@ -226,18 +229,23 @@ public class SpringRadTuiApp {
                                         totalSteps.set(total);
                                         currentStepText.set(message);
                                         logs.add("[%d/%d] %s".formatted(step, total, message));
+                                        activityLogStore.append("[%d/%d] %s".formatted(step, total, message));
                                     });
                                 }
 
                                 @Override
                                 public void detail(String message) {
-                                    runner().runOnRenderThread(() -> logs.add("  - " + message));
+                                    runner().runOnRenderThread(() -> {
+                                        logs.add("  - " + message);
+                                        activityLogStore.append("  - " + message);
+                                    });
                                 }
                             });
                             resultRef.set(result);
                             runner().runOnRenderThread(() -> {
                                 statusText.set("Completed (press ENTER to close)");
                                 awaitingConfirmation.set(true);
+                                activityLogStore.append("Generation completed. Awaiting user confirmation to exit.");
                             });
                         } catch (Exception e) {
                             failureRef.set(e);
@@ -245,6 +253,7 @@ public class SpringRadTuiApp {
                                 statusText.set("Failed (press ENTER to close)");
                                 logs.add("Error: " + e.getMessage());
                                 awaitingConfirmation.set(true);
+                                activityLogStore.append("Generation failed: " + e.getMessage());
                             });
                         }
                     }, "springrad-tui-progress-worker");
