@@ -3,6 +3,7 @@ package dev.springrad.tui;
 import dev.springrad.cli.CliArgs;
 import dev.springrad.core.ProjectConfig;
 import dev.tamboui.backend.panama.PanamaBackendProvider;
+import dev.tamboui.style.Color;
 import dev.tamboui.toolkit.app.ToolkitApp;
 import dev.tamboui.toolkit.elements.FormElement;
 import dev.tamboui.tui.TuiConfig;
@@ -25,6 +26,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static dev.tamboui.toolkit.Toolkit.column;
+import static dev.tamboui.toolkit.Toolkit.columns;
 import static dev.tamboui.toolkit.Toolkit.form;
 import static dev.tamboui.toolkit.Toolkit.panel;
 import static dev.tamboui.toolkit.Toolkit.spacer;
@@ -105,6 +107,11 @@ public class SpringRadTuiApp {
                             .field("database", "Database", FieldType.SELECT)
                             .field("dependencies", "Dependencies (CSV)")
                             .field("outputDirectory", "Output directory")
+                            .labelWidth(22)
+                            .fieldSpacing(1)
+                            .rounded()
+                            .borderColor(Color.CYAN)
+                            .focusedBorderColor(Color.LIGHT_CYAN)
                             .submitOnEnter(true)
                             .arrowNavigation(true)
                             .onSubmit(submitted -> {
@@ -113,13 +120,45 @@ public class SpringRadTuiApp {
                             });
 
                     return column(
-                            panel("SpringRad Interactive CLI",
-                                    text("Powered by TamboUI toolkit"),
-                                    text("Use arrow keys/TAB to move fields and ENTER to generate.")
-                            ),
-                            spacer(),
-                            interactiveForm
-                    );
+                            panel(" SPRINGRAD ",
+                                    text("Scaffold production-ready Spring Boot projects").bold().white(),
+                                    text("Preset-driven generation with live preview").cyan()
+                            )
+                                    .doubleBorder()
+                                    .borderColor(Color.CYAN)
+                                    .padding(1),
+                            columns(
+                                    panel(" Project Form ", interactiveForm)
+                                            .borderColor(Color.LIGHT_BLUE)
+                                            .rounded()
+                                            .padding(1)
+                                            .percent(68),
+                                    panel(" Live Preview ",
+                                            text("Preset:       " + value(formState.selectValue("preset"), "web-api")).yellow(),
+                                            text("Name:         " + value(formState.textValue("name"), "springrad-app")).white(),
+                                            text("Group:        " + value(formState.textValue("groupId"), "com.example")),
+                                            text("Artifact:     " + value(formState.textValue("artifactId"), "springrad-app")).green(),
+                                            text("Java:         " + value(formState.textValue("javaVersion"), "21")),
+                                            text("Boot:         " + value(formState.textValue("bootVersion"), "latest")),
+                                            text("Build:        " + value(formState.selectValue("buildTool"), "gradle")),
+                                            text("Auth:         " + value(formState.selectValue("authStyle"), "jwt")),
+                                            text("Database:     " + value(formState.selectValue("database"), "postgresql")),
+                                            text("Dependencies: " + value(formState.textValue("dependencies"), "(preset defaults)")),
+                                            text("Output:       " + value(formState.textValue("outputDirectory"), "./springrad-app")).cyan()
+                                    )
+                                            .borderColor(Color.LIGHT_MAGENTA)
+                                            .rounded()
+                                            .padding(1)
+                                            .percent(32)
+                            ).spacing(1),
+                            panel(
+                                    text("Keys: TAB/Shift+TAB to navigate, arrows to move selects, ENTER to generate").gray(),
+                                    text("Tip: leave optional fields blank to use preset defaults").gray()
+                            )
+                                    .borderColor(Color.DARK_GRAY)
+                                    .rounded()
+                                    .padding(1)
+                    ).spacing(1);
                 }
             };
 
@@ -129,6 +168,13 @@ public class SpringRadTuiApp {
             } catch (Exception e) {
                 throw new IllegalStateException("Failed to run TamboUI interactive flow", e);
             }
+        }
+
+        private static String value(String raw, String fallback) {
+            if (raw == null || raw.isBlank()) {
+                return fallback;
+            }
+            return raw.trim();
         }
 
         private static InteractiveSelection toSelection(FormState formState, List<String> availablePresets) {
