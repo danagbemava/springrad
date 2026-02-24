@@ -7,6 +7,8 @@ import dev.springrad.preset.PresetService;
 import dev.tamboui.style.Color;
 import dev.tamboui.toolkit.app.ToolkitApp;
 import dev.tamboui.toolkit.element.Element;
+import dev.tamboui.toolkit.elements.FormElement;
+import dev.tamboui.toolkit.event.EventResult;
 import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.widgets.form.FieldType;
 import dev.tamboui.widgets.form.FormState;
@@ -64,7 +66,8 @@ public final class PresetTuiApp {
 
             @Override
             protected Element render() {
-                var presetForm = form(formState)
+                final FormElement[] presetFormRef = new FormElement[1];
+                FormElement presetForm = form(formState)
                         .field("action", "Action", FieldType.SELECT)
                         .field("name", "Preset Name")
                         .field("deps", "Dependencies (CSV)")
@@ -82,6 +85,13 @@ public final class PresetTuiApp {
                         .focusedBorderColor(Color.LIGHT_CYAN)
                         .submitOnEnter(true)
                         .arrowNavigation(true)
+                        .onKeyEvent(event -> {
+                            if (event.isConfirm()) {
+                                presetFormRef[0].submit();
+                                return EventResult.HANDLED;
+                            }
+                            return EventResult.UNHANDLED;
+                        })
                         .onSubmit(submitted -> {
                             String action = value(submitted.selectValue("action"), "list");
                             switch (action) {
@@ -161,6 +171,7 @@ public final class PresetTuiApp {
                                 }
                             }
                         });
+                presetFormRef[0] = presetForm;
 
                 int from = Math.max(0, activity.size() - 12);
                 List<Element> logLines = new ArrayList<>();
@@ -174,16 +185,18 @@ public final class PresetTuiApp {
                 return column(
                         panel(" PRESET MANAGEMENT ",
                                 text("Manage presets using TUI actions").bold().white(),
-                                text("Actions: list, save, delete, quit").cyan()
-                        ).doubleBorder().borderColor(Color.CYAN).padding(1),
-                        columns(
-                                panel(" Preset Form ", presetForm).rounded().borderColor(Color.LIGHT_BLUE).padding(1).percent(65),
-                                panel(" Activity Log ", column(logLines.toArray(new Element[0])).spacing(0))
-                                        .rounded().borderColor(Color.LIGHT_MAGENTA).padding(1).percent(35)
-                        ).spacing(1),
-                        panel(
+                                text("Actions: list, save, delete, quit").cyan(),
+                                text(""),
+                                columns(
+                                        presetForm.percent(65),
+                                        column(
+                                                text("Activity").bold().magenta(),
+                                                column(logLines.toArray(new Element[0])).spacing(0)
+                                        ).percent(35)
+                                ).spacing(1),
+                                text(""),
                                 text("Use TAB/Shift+TAB to navigate fields, arrows for selects, ENTER to execute action.").gray()
-                        ).rounded().borderColor(Color.DARK_GRAY).padding(1)
+                        ).doubleBorder().borderColor(Color.CYAN).padding(1)
                 ).spacing(1);
             }
         };

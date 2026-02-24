@@ -110,6 +110,7 @@ public class SpringRadTuiApp {
 
                 @Override
                 protected dev.tamboui.toolkit.element.Element render() {
+                    final FormElement[] interactiveFormRef = new FormElement[1];
                     FormElement interactiveForm = form(formState)
                             .field("preset", "Preset", FieldType.SELECT)
                             .field("name", "Project name")
@@ -130,50 +131,45 @@ public class SpringRadTuiApp {
                             .focusedBorderColor(Color.LIGHT_CYAN)
                             .submitOnEnter(true)
                             .arrowNavigation(true)
+                            .onKeyEvent(event -> {
+                                if (event.isConfirm()) {
+                                    interactiveFormRef[0].submit();
+                                    return EventResult.HANDLED;
+                                }
+                                return EventResult.UNHANDLED;
+                            })
                             .onSubmit(submitted -> {
                                 selectionRef.set(toSelection(submitted, availablePresets));
                                 quit();
                             });
+                    interactiveFormRef[0] = interactiveForm;
 
                     return column(
                             panel(" SPRINGRAD ",
                                     text("Scaffold production-ready Spring Boot projects").bold().white(),
-                                    text("Preset-driven generation with live preview").cyan()
-                            )
-                                    .doubleBorder()
-                                    .borderColor(Color.CYAN)
-                                    .padding(1),
-                            columns(
-                                    panel(" Project Form ", interactiveForm)
-                                            .borderColor(Color.LIGHT_BLUE)
-                                            .rounded()
-                                            .padding(1)
-                                            .percent(68),
-                                    panel(" Live Preview ",
-                                            text("Preset:       " + value(formState.selectValue("preset"), "web-api")).yellow(),
-                                            text("Name:         " + value(formState.textValue("name"), "springrad-app")).white(),
-                                            text("Group:        " + value(formState.textValue("groupId"), "com.example")),
-                                            text("Artifact:     " + value(formState.textValue("artifactId"), "springrad-app")).green(),
-                                            text("Java:         " + value(formState.textValue("javaVersion"), "21")),
-                                            text("Boot:         " + value(formState.textValue("bootVersion"), "latest")),
-                                            text("Build:        " + value(formState.selectValue("buildTool"), "gradle")),
-                                            text("Auth:         " + value(formState.selectValue("authStyle"), "jwt")),
-                                            text("Database:     " + value(formState.selectValue("database"), "postgresql")),
-                                            text("Dependencies: " + value(formState.textValue("dependencies"), "(preset defaults)")),
-                                            text("Output:       " + value(formState.textValue("outputDirectory"), "./springrad-app")).cyan()
-                                    )
-                                            .borderColor(Color.LIGHT_MAGENTA)
-                                            .rounded()
-                                            .padding(1)
-                                            .percent(32)
-                            ).spacing(1),
-                            panel(
+                                    text("Preset-driven generation with live preview").cyan(),
+                                    text(""),
+                                    columns(
+                                            interactiveForm.percent(68),
+                                            column(
+                                                    text("Preview").bold().magenta(),
+                                                    text("Preset:       " + value(formState.selectValue("preset"), "web-api")).yellow(),
+                                                    text("Name:         " + value(formState.textValue("name"), "springrad-app")).white(),
+                                                    text("Group:        " + value(formState.textValue("groupId"), "com.example")),
+                                                    text("Artifact:     " + value(formState.textValue("artifactId"), "springrad-app")).green(),
+                                                    text("Java:         " + value(formState.textValue("javaVersion"), "21")),
+                                                    text("Boot:         " + value(formState.textValue("bootVersion"), "latest")),
+                                                    text("Build:        " + value(formState.selectValue("buildTool"), "gradle")),
+                                                    text("Auth:         " + value(formState.selectValue("authStyle"), "jwt")),
+                                                    text("Database:     " + value(formState.selectValue("database"), "postgresql")),
+                                                    text("Dependencies: " + value(formState.textValue("dependencies"), "(preset defaults)")),
+                                                    text("Output:       " + value(formState.textValue("outputDirectory"), "./springrad-app")).cyan()
+                                            ).percent(32)
+                                    ).spacing(1),
+                                    text(""),
                                     text("Keys: TAB/Shift+TAB to navigate, arrows to move selects, ENTER to generate").gray(),
                                     text("Tip: leave optional fields blank to use preset defaults").gray()
-                            )
-                                    .borderColor(Color.DARK_GRAY)
-                                    .rounded()
-                                    .padding(1)
+                            ).doubleBorder().borderColor(Color.CYAN).padding(1)
                     ).spacing(1);
                 }
             };

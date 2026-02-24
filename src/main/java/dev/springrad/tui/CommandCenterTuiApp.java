@@ -2,7 +2,9 @@ package dev.springrad.tui;
 
 import dev.tamboui.style.Color;
 import dev.tamboui.toolkit.app.ToolkitApp;
+import dev.tamboui.toolkit.event.EventResult;
 import dev.tamboui.toolkit.element.Element;
+import dev.tamboui.toolkit.elements.FormElement;
 import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.widgets.form.FieldType;
 import dev.tamboui.widgets.form.FormState;
@@ -36,30 +38,39 @@ public final class CommandCenterTuiApp {
 
             @Override
             protected Element render() {
+                final FormElement[] actionFormRef = new FormElement[1];
+                FormElement actionForm = form(formState)
+                        .field("action", "Action", FieldType.SELECT)
+                        .labelWidth(16)
+                        .fieldSpacing(1)
+                        .rounded()
+                        .borderColor(Color.CYAN)
+                        .focusedBorderColor(Color.LIGHT_CYAN)
+                        .submitOnEnter(true)
+                        .arrowNavigation(true)
+                        .onSubmit(submitted -> {
+                            String raw = submitted.selectValue("action");
+                            selection.set(Action.valueOf(raw));
+                            quit();
+                        })
+                        .onKeyEvent(event -> {
+                            if (event.isConfirm()) {
+                                actionFormRef[0].submit();
+                                return EventResult.HANDLED;
+                            }
+                            return EventResult.UNHANDLED;
+                        });
+                actionFormRef[0] = actionForm;
+
                 return column(
                         panel(" SPRINGRAD COMMAND CENTER ",
                                 text("Everything managed through TUI").bold().white(),
-                                text("Choose an action and press ENTER").cyan()
-                        ).doubleBorder().borderColor(Color.CYAN).padding(1),
-                        panel(" Action ",
-                                form(formState)
-                                        .field("action", "Action", FieldType.SELECT)
-                                        .labelWidth(16)
-                                        .fieldSpacing(1)
-                                        .rounded()
-                                        .borderColor(Color.CYAN)
-                                        .focusedBorderColor(Color.LIGHT_CYAN)
-                                        .submitOnEnter(true)
-                                        .arrowNavigation(true)
-                                        .onSubmit(submitted -> {
-                                            String raw = submitted.selectValue("action");
-                                            selection.set(Action.valueOf(raw));
-                                            quit();
-                                        })
-                        ).rounded().borderColor(Color.LIGHT_BLUE).padding(1),
-                        panel(
+                                text("Choose an action and press ENTER").cyan(),
+                                text(""),
+                                actionForm,
+                                text(""),
                                 text("Use TAB/Shift+TAB and arrow keys. ENTER confirms.").gray()
-                        ).rounded().borderColor(Color.DARK_GRAY).padding(1)
+                        ).doubleBorder().borderColor(Color.CYAN).padding(1)
                 ).spacing(1);
             }
         };
