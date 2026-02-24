@@ -1,6 +1,6 @@
 package dev.springrad.cli;
 
-import dev.springrad.tui.CommandCenterTuiApp;
+import dev.springrad.tui.UnifiedSpringRadTuiApp;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.IVersionProvider;
 import picocli.CommandLine.Spec;
@@ -30,13 +30,7 @@ public final class SpringRadCommand implements Runnable {
         }
 
         try {
-            CommandCenterTuiApp.Action action = new CommandCenterTuiApp().start();
-            switch (action) {
-                case generate_project -> spec.commandLine().execute("new", "springrad-app", "--interactive");
-                case manage_presets -> spec.commandLine().execute("preset");
-                case quit -> {
-                }
-            }
+            new UnifiedSpringRadTuiApp().start();
         } catch (IllegalStateException e) {
             spec.commandLine().getErr().println(e.getMessage());
         }
