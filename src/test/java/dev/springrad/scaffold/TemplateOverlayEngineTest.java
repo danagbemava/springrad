@@ -287,6 +287,38 @@ class TemplateOverlayEngineTest {
         assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/api/GlobalExceptionHandler.java")));
     }
 
+    @Test
+    void rendersOpenApiConfigWhenScaffoldSelected() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/config"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/config/OpenApiConfig.java"),
+                "package {{packageName}}.config;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of("OpenApiConfig")), false);
+
+        assertTrue(Files.exists(output.resolve("src/main/java/dev/example/demo/app/config/OpenApiConfig.java")));
+    }
+
+    @Test
+    void skipsOpenApiConfigWhenScaffoldNotSelected() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/config"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/config/OpenApiConfig.java"),
+                "package {{packageName}}.config;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of()), false);
+
+        assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/config/OpenApiConfig.java")));
+    }
+
     private static ProjectConfig config(Path output) {
         return config(output, ProjectConfig.AuthStyle.jwt, List.of());
     }

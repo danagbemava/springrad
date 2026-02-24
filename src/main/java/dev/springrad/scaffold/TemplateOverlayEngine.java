@@ -312,6 +312,9 @@ public final class TemplateOverlayEngine {
         if ("GlobalExceptionHandler.java".equals(fileName) && !config.scaffolds().contains("GlobalExceptionHandler")) {
             return true;
         }
+        if ("OpenApiConfig.java".equals(fileName) && !config.scaffolds().contains("OpenApiConfig")) {
+            return true;
+        }
         return false;
     }
 
