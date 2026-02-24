@@ -187,6 +187,42 @@ class TemplateOverlayEngineTest {
         assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/auth/AuthController.java")));
     }
 
+    @Test
+    void rendersJwtTokenProviderWhenSelectedAndJwtAuth() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/security"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/security/JwtTokenProvider.java"),
+                "package {{packageName}}.security;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of("JwtTokenProvider")), false);
+
+        assertTrue(Files.exists(output.resolve("src/main/java/dev/example/demo/app/security/JwtTokenProvider.java")));
+    }
+
+    @Test
+    void skipsJwtTokenProviderWhenSessionAuthOrScaffoldMissing() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/security"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/security/JwtTokenProvider.java"),
+                "package {{packageName}}.security;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+
+        Path outputSession = tempDir.resolve("out-session");
+        engine.overlay(config(outputSession, ProjectConfig.AuthStyle.session, List.of("JwtTokenProvider")), false);
+        assertFalse(Files.exists(outputSession.resolve("src/main/java/dev/example/demo/app/security/JwtTokenProvider.java")));
+
+        Path outputNoScaffold = tempDir.resolve("out-no-scaffold");
+        engine.overlay(config(outputNoScaffold, ProjectConfig.AuthStyle.jwt, List.of()), false);
+        assertFalse(Files.exists(outputNoScaffold.resolve("src/main/java/dev/example/demo/app/security/JwtTokenProvider.java")));
+    }
+
     private static ProjectConfig config(Path output) {
         return config(output, ProjectConfig.AuthStyle.jwt, List.of());
     }

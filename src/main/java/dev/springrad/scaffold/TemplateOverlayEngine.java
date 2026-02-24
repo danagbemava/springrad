@@ -300,6 +300,12 @@ public final class TemplateOverlayEngine {
         if ("AuthController.java".equals(fileName) && !config.scaffolds().contains("AuthController")) {
             return true;
         }
+        if ("JwtTokenProvider.java".equals(fileName) && config.authStyle() != ProjectConfig.AuthStyle.jwt) {
+            return true;
+        }
+        if ("JwtTokenProvider.java".equals(fileName) && !config.scaffolds().contains("JwtTokenProvider")) {
+            return true;
+        }
         return false;
     }
 
