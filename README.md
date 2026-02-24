@@ -11,13 +11,14 @@ Spring Boot RAD CLI for scaffolding production-ready Spring projects from preset
 ## Build
 
 ```bash
+./dev clean
 ./gradlew clean build
 ```
 
 ## Test
 
 ```bash
-./gradlew test
+./dev test
 ```
 
 Test execution generates JaCoCo coverage reports at:
@@ -28,20 +29,19 @@ Test execution generates JaCoCo coverage reports at:
 ## Run CLI
 
 ```bash
-./gradlew run --args='--help'
+./dev smoke
 ```
 
-Or install a local distribution:
+Build the local distribution explicitly:
 
 ```bash
-./gradlew installDist
-./build/install/springrad/bin/springrad --help
+./dev dist
 ```
 
 ## Generate Project (Non-interactive)
 
 ```bash
-./build/install/springrad/bin/springrad new demo-app \
+./dev run -- new demo-app \
   --preset web-api \
   --group dev.example \
   --artifact demo-app \
@@ -60,7 +60,7 @@ Interactive mode requires Java 22+ at runtime because the current backend uses P
 ```bash
 JAVA_HOME="$HOME/Library/Java/JavaVirtualMachines/azul-22.0.2/Contents/Home" \
 JDK_JAVA_OPTIONS="--enable-native-access=ALL-UNNAMED" \
-./build/install/springrad/bin/springrad new demo-app -i
+./dev run -- new demo-app -i
 ```
 
 ## Preset Commands
@@ -68,20 +68,20 @@ JDK_JAVA_OPTIONS="--enable-native-access=ALL-UNNAMED" \
 List presets:
 
 ```bash
-./build/install/springrad/bin/springrad preset list
+./dev run -- preset list
 ```
 
 Save a preset:
 
 ```bash
-./build/install/springrad/bin/springrad preset save my-preset \
+./dev run -- preset save my-preset \
   --from web-api
 ```
 
 Delete a preset:
 
 ```bash
-./build/install/springrad/bin/springrad preset delete my-preset
+./dev run -- preset delete my-preset
 ```
 
 Preset storage location:

@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+GRADLEW="$ROOT_DIR/gradlew"
+DIST_BIN="$ROOT_DIR/build/install/springrad/bin/springrad"
+
+usage() {
+  cat <<'EOF'
+springrad developer interface
+
+Usage:
+  ./dev test [-- <gradle test args>]
+  ./dev dist
+  ./dev run -- <springrad args>
+  ./dev smoke
+  ./dev native
+  ./dev clean
+
+Examples:
+  ./dev test
+  ./dev run -- new demo-app --preset web-api --output ./demo-app
+  ./dev run -- new demo-app -i
+
+Notes:
+  - For interactive TUI mode, use Java 22+ with:
+      JAVA_HOME=/path/to/jdk22 JDK_JAVA_OPTIONS=--enable-native-access=ALL-UNNAMED ./dev run -- new demo-app -i
+EOF
+}
+
+run_dist() {
+  if [[ ! -x "$DIST_BIN" ]]; then
+    "$GRADLEW" --no-daemon installDist
+  fi
+  "$DIST_BIN" "$@"
+}
+
+if [[ $# -eq 0 ]]; then
+  usage
+  exit 1
+fi
+
+cmd="$1"
+shift
+
+case "$cmd" in
+  test)
+    if [[ "${1:-}" == "--" ]]; then
+      shift
+    fi
+    "$GRADLEW" --no-daemon test "$@"
+    ;;
+  dist)
+    "$GRADLEW" --no-daemon installDist
+    ;;
+  run)
+    if [[ "${1:-}" == "--" ]]; then
+      shift
+    fi
+    run_dist "$@"
+    ;;
+  smoke)
+    run_dist --help
+    ;;
+  native)
+    "$GRADLEW" --no-daemon nativeCompile nativeTest
+    ;;
+  clean)
+    "$GRADLEW" --no-daemon clean
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac
