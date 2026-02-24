@@ -104,6 +104,8 @@ public final class TemplateOverlayEngine {
         values.put("messagingDevConfig", messagingDevConfig(config));
         values.put("messagingProdConfig", messagingProdConfig(config));
         values.put("jwtSecretConfig", jwtSecretConfig(config));
+        values.put("envJwtSection", envJwtSection(config));
+        values.put("envMessagingSection", envMessagingSection(config));
         return values;
     }
 
@@ -179,6 +181,29 @@ public final class TemplateOverlayEngine {
     private static String jwtSecretConfig(ProjectConfig config) {
         if (config.authStyle() == ProjectConfig.AuthStyle.jwt) {
             return "app:\n  security:\n    jwt:\n      secret: ${JWT_SECRET}";
+        }
+        return "";
+    }
+
+    private static String envJwtSection(ProjectConfig config) {
+        if (config.authStyle() != ProjectConfig.AuthStyle.jwt) {
+            return "";
+        }
+        return """
+                
+                # Security (JWT)
+                # Must be at least 256 bits (32 characters)
+                JWT_SECRET=change-me-to-a-secure-random-string-at-least-256-bits
+                """;
+    }
+
+    private static String envMessagingSection(ProjectConfig config) {
+        if (config.dependencies().contains("kafka")) {
+            return """
+                    
+                    # Kafka (event-driven only)
+                    KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+                    """;
         }
         return "";
     }
