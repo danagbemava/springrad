@@ -4,6 +4,7 @@ import dev.springrad.core.ProjectConfig;
 import dev.springrad.core.ProjectGenerator;
 import dev.springrad.core.InitializrClient;
 import dev.springrad.core.SpringRadException;
+import dev.springrad.core.GitInitializer;
 import dev.springrad.preset.PresetService;
 import dev.springrad.tui.SpringRadTuiApp;
 import picocli.CommandLine.Command;
@@ -20,14 +21,20 @@ import java.util.concurrent.Callable;
 public final class NewCommand implements Callable<Integer> {
     private final PresetService presetService;
     private final ProjectGenerator projectGenerator;
+    private final GitInitializer gitInitializer;
 
     public NewCommand() {
-        this(new PresetService(), new InitializrClient());
+        this(new PresetService(), new InitializrClient(), new GitInitializer());
     }
 
     NewCommand(PresetService presetService, ProjectGenerator projectGenerator) {
+        this(presetService, projectGenerator, new GitInitializer());
+    }
+
+    NewCommand(PresetService presetService, ProjectGenerator projectGenerator, GitInitializer gitInitializer) {
         this.presetService = presetService;
         this.projectGenerator = projectGenerator;
+        this.gitInitializer = gitInitializer;
     }
 
     @Spec
@@ -90,6 +97,7 @@ public final class NewCommand implements Callable<Integer> {
             CliArgs cliArgs = toCliArgs();
             ProjectConfig config = presetService.resolve(presetName, cliArgs);
             projectGenerator.generate(config);
+            gitInitializer.initializeRepository(config.outputDirectory(), spec.commandLine().getErr());
             spec.commandLine().getOut().printf("Project generated at %s%n", config.outputDirectory());
             return 0;
         } catch (SpringRadException e) {
