@@ -52,8 +52,8 @@ class NewCommandTest {
 
         assertEquals(0, exitCode);
         String stdout = out.toString();
-        assertTrue(stdout.contains("[1/5] Resolving preset and configuration..."));
-        assertTrue(stdout.contains("[5/5] Finalizing output..."));
+        assertTrue(stdout.contains("[1/5] Resolving preset and configuration"));
+        assertTrue(stdout.contains("[5/5] Finalizing output"));
         assertTrue(java.nio.file.Files.exists(output.resolve("src/main/resources/application.yml")));
         assertTrue(java.nio.file.Files.exists(output.resolve("src/main/resources/logback-spring.xml")));
     }
@@ -132,6 +132,12 @@ class NewCommandTest {
                         tempDir.resolve("generated")
                 );
                 return new InteractiveSelection("web-api", args);
+            }
+
+            @Override
+            public <T> T runWithProgress(String title, ProgressTask<T> task) throws Exception {
+                return task.run((currentStep, totalSteps, message) -> {
+                });
             }
         };
         NewCommand command = new NewCommand(

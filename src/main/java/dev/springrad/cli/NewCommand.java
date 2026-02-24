@@ -123,16 +123,23 @@ public final class NewCommand implements Callable<Integer> {
             cliArgs = toCliArgs();
         }
 
+        final CliArgs finalCliArgs = cliArgs;
+        final String finalPresetName = resolvedPresetName;
+
         try {
-            spec.commandLine().getOut().println("[1/5] Resolving preset and configuration...");
-            ProjectConfig config = presetService.resolve(resolvedPresetName, cliArgs);
-            spec.commandLine().getOut().println("[2/5] Generating base Spring project from Initializr...");
-            projectGenerator.generate(config);
-            spec.commandLine().getOut().println("[3/5] Applying template overlays and scaffolds...");
-            templateOverlayEngine.overlay(config, false);
-            spec.commandLine().getOut().println("[4/5] Initializing git repository...");
-            gitInitializer.initializeRepository(config.outputDirectory(), spec.commandLine().getErr());
-            spec.commandLine().getOut().println("[5/5] Finalizing output...");
+            ProjectConfig config;
+            if (interactive) {
+                config = tuiApp.runWithProgress("Project Generation", reporter ->
+                        executeGenerationFlow(finalPresetName, finalCliArgs, reporter)
+                );
+            } else {
+                config = executeGenerationFlow(
+                        finalPresetName,
+                        finalCliArgs,
+                        (currentStep, totalSteps, message) ->
+                                spec.commandLine().getOut().printf("[%d/%d] %s%n", currentStep, totalSteps, message)
+                );
+            }
             spec.commandLine().getOut().printf("Project generated at %s%n", config.outputDirectory());
             return 0;
         } catch (SpringRadException e) {
@@ -144,7 +151,34 @@ public final class NewCommand implements Callable<Integer> {
         } catch (IllegalArgumentException e) {
             spec.commandLine().getErr().println(e.getMessage());
             return 1;
+        } catch (Exception e) {
+            spec.commandLine().getErr().println("Generation failed: " + e.getMessage());
+            if (verbose) {
+                e.printStackTrace(spec.commandLine().getErr());
+            }
+            return 1;
         }
+    }
+
+    private ProjectConfig executeGenerationFlow(
+            String resolvedPresetName,
+            CliArgs cliArgs,
+            SpringRadTuiApp.ProgressReporter reporter
+    ) {
+        reporter.step(1, 5, "Resolving preset and configuration");
+        ProjectConfig config = presetService.resolve(resolvedPresetName, cliArgs);
+
+        reporter.step(2, 5, "Generating base Spring project from Initializr");
+        projectGenerator.generate(config);
+
+        reporter.step(3, 5, "Applying template overlays and scaffolds");
+        templateOverlayEngine.overlay(config, false);
+
+        reporter.step(4, 5, "Initializing git repository");
+        gitInitializer.initializeRepository(config.outputDirectory(), spec.commandLine().getErr());
+
+        reporter.step(5, 5, "Finalizing output");
+        return config;
     }
 
     CliArgs toCliArgs() {

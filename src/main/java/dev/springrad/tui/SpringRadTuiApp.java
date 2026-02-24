@@ -5,6 +5,7 @@ import dev.springrad.core.ProjectConfig;
 import dev.tamboui.backend.panama.PanamaBackendProvider;
 import dev.tamboui.style.Color;
 import dev.tamboui.toolkit.app.ToolkitApp;
+import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.toolkit.elements.FormElement;
 import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.widgets.form.FieldType;
@@ -18,7 +19,9 @@ import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -51,8 +54,23 @@ public class SpringRadTuiApp {
         return backend.start(initialName, availablePresets);
     }
 
+    public <T> T runWithProgress(String title, ProgressTask<T> task) throws Exception {
+        return backend.runWithProgress(title, task);
+    }
+
+    public interface ProgressReporter {
+        void step(int currentStep, int totalSteps, String message);
+    }
+
+    @FunctionalInterface
+    public interface ProgressTask<T> {
+        T run(ProgressReporter reporter) throws Exception;
+    }
+
     private interface Backend {
         InteractiveSelection start(String initialName, List<String> availablePresets);
+
+        <T> T runWithProgress(String title, ProgressTask<T> task) throws Exception;
     }
 
     private static final class TamboUiBackend implements Backend {
@@ -168,6 +186,96 @@ public class SpringRadTuiApp {
             } catch (Exception e) {
                 throw new IllegalStateException("Failed to run TamboUI interactive flow", e);
             }
+        }
+
+        @Override
+        public <T> T runWithProgress(String title, ProgressTask<T> task) throws Exception {
+            AtomicReference<T> resultRef = new AtomicReference<>();
+            AtomicReference<Exception> failureRef = new AtomicReference<>();
+            AtomicReference<String> currentStepText = new AtomicReference<>("Preparing...");
+            AtomicReference<String> statusText = new AtomicReference<>("Running...");
+            AtomicReference<Integer> currentStep = new AtomicReference<>(0);
+            AtomicReference<Integer> totalSteps = new AtomicReference<>(0);
+            List<String> logs = Collections.synchronizedList(new ArrayList<>());
+
+            ToolkitApp app = new ToolkitApp() {
+                @Override
+                protected TuiConfig configure() {
+                    try {
+                        return TuiConfig.builder()
+                                .backend(new PanamaBackendProvider().create())
+                                .build();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException("Failed to initialize TamboUI backend", e);
+                    }
+                }
+
+                @Override
+                protected void onStart() {
+                    Thread worker = new Thread(() -> {
+                        try {
+                            T result = task.run((step, total, message) -> runner().runOnRenderThread(() -> {
+                                currentStep.set(step);
+                                totalSteps.set(total);
+                                currentStepText.set(message);
+                                logs.add("[%d/%d] %s".formatted(step, total, message));
+                            }));
+                            resultRef.set(result);
+                            runner().runOnRenderThread(() -> statusText.set("Completed"));
+                        } catch (Exception e) {
+                            failureRef.set(e);
+                            runner().runOnRenderThread(() -> {
+                                statusText.set("Failed");
+                                logs.add("Error: " + e.getMessage());
+                            });
+                        } finally {
+                            runner().schedule(this::quit, Duration.ofMillis(700));
+                        }
+                    }, "springrad-tui-progress-worker");
+                    worker.setDaemon(true);
+                    worker.start();
+                }
+
+                @Override
+                protected Element render() {
+                    int step = currentStep.get();
+                    int total = totalSteps.get();
+                    String stepText = currentStepText.get();
+
+                    List<Element> logItems = new ArrayList<>();
+                    synchronized (logs) {
+                        int from = Math.max(0, logs.size() - 8);
+                        for (int i = from; i < logs.size(); i++) {
+                            logItems.add(text(logs.get(i)));
+                        }
+                    }
+                    if (logItems.isEmpty()) {
+                        logItems.add(text("Waiting for execution steps...").gray());
+                    }
+
+                    return column(
+                            panel(" " + title + " ",
+                                    text("SpringRad execution progress").bold().white(),
+                                    text("Updates refresh as each generation step finishes").cyan()
+                            ).doubleBorder().borderColor(Color.CYAN).padding(1),
+                            panel(" Current Step ",
+                                    text("Step: " + (total == 0 ? "-" : (step + "/" + total))).yellow(),
+                                    text(stepText).white(),
+                                    text("Status: " + statusText.get()).green()
+                            ).rounded().borderColor(Color.LIGHT_BLUE).padding(1),
+                            panel(" Activity Log ",
+                                    column(logItems.toArray(new Element[0])).spacing(0)
+                            ).rounded().borderColor(Color.LIGHT_MAGENTA).padding(1)
+                    ).spacing(1);
+                }
+            };
+
+            app.run();
+
+            if (failureRef.get() != null) {
+                throw failureRef.get();
+            }
+            return resultRef.get();
         }
 
         private static String value(String raw, String fallback) {
@@ -299,6 +407,11 @@ public class SpringRadTuiApp {
                     output
             );
             return new InteractiveSelection(presetName, cliArgs);
+        }
+
+        @Override
+        public <T> T runWithProgress(String title, ProgressTask<T> task) throws Exception {
+            return task.run((currentStep, totalSteps, message) -> out.printf("[%d/%d] %s%n", currentStep, totalSteps, message));
         }
 
         private String pickPreset(List<String> presets) {
