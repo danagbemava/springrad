@@ -32,6 +32,18 @@ Test execution generates JaCoCo coverage reports at:
 ./dev smoke
 ```
 
+Launch TUI command center:
+
+```bash
+./dev run -- 
+```
+
+Or directly:
+
+```bash
+./build/install/springrad/bin/springrad
+```
+
 Build the local distribution explicitly:
 
 ```bash
@@ -64,6 +76,14 @@ JDK_JAVA_OPTIONS="--enable-native-access=ALL-UNNAMED" \
 ```
 
 ## Preset Commands
+
+Preset management is available in TUI:
+
+```bash
+./dev run -- preset
+```
+
+CLI fallback commands (scriptable/non-TTY):
 
 List presets:
 

@@ -1,5 +1,6 @@
 package dev.springrad.cli;
 
+import dev.springrad.tui.PresetTuiApp;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Spec;
 import picocli.CommandLine.Model.CommandSpec;
@@ -19,6 +20,10 @@ public final class PresetCommand implements Runnable {
 
     @Override
     public void run() {
-        spec.commandLine().usage(spec.commandLine().getOut());
+        if (System.console() == null) {
+            spec.commandLine().usage(spec.commandLine().getOut());
+            return;
+        }
+        new PresetTuiApp().start();
     }
 }

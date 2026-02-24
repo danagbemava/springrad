@@ -1,5 +1,6 @@
 package dev.springrad.cli;
 
+import dev.springrad.tui.CommandCenterTuiApp;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.IVersionProvider;
 import picocli.CommandLine.Spec;
@@ -23,7 +24,18 @@ public final class SpringRadCommand implements Runnable {
 
     @Override
     public void run() {
-        spec.commandLine().usage(spec.commandLine().getOut());
+        if (System.console() == null) {
+            spec.commandLine().usage(spec.commandLine().getOut());
+            return;
+        }
+
+        CommandCenterTuiApp.Action action = new CommandCenterTuiApp().start();
+        switch (action) {
+            case generate_project -> spec.commandLine().execute("new", "springrad-app", "--interactive");
+            case manage_presets -> spec.commandLine().execute("preset");
+            case quit -> {
+            }
+        }
     }
 
     static final class VersionProvider implements IVersionProvider {
