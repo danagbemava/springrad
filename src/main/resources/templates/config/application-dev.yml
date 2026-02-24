@@ -1,0 +1,20 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: {{datasourceUrl}}
+    username: {{datasourceUsername}}
+    password: {{datasourcePassword}}
+    driver-class-name: {{datasourceDriverClassName}}
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+{{messagingDevConfig}}
+
+logging:
+  level:
+    root: INFO
+    {{packageName}}: DEBUG
