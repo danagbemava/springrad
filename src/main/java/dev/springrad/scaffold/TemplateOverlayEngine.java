@@ -330,6 +330,12 @@ public final class TemplateOverlayEngine {
         if ("KafkaTopicConfig.java".equals(fileName) && !config.dependencies().contains("kafka")) {
             return true;
         }
+        if ("DeadLetterQueueConfig.java".equals(fileName) && !config.scaffolds().contains("DeadLetterQueueConfig")) {
+            return true;
+        }
+        if ("DeadLetterQueueConfig.java".equals(fileName) && !config.dependencies().contains("kafka")) {
+            return true;
+        }
         return false;
     }
 
