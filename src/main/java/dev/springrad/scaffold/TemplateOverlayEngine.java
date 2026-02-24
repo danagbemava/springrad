@@ -297,6 +297,9 @@ public final class TemplateOverlayEngine {
         if ("SecurityConfigSession.java".equals(fileName) && !config.scaffolds().contains("SecurityConfigSession")) {
             return true;
         }
+        if ("AuthController.java".equals(fileName) && !config.scaffolds().contains("AuthController")) {
+            return true;
+        }
         return false;
     }
 

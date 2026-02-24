@@ -155,6 +155,38 @@ class TemplateOverlayEngineTest {
         assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/security/SecurityConfigSession.java")));
     }
 
+    @Test
+    void rendersAuthControllerWhenScaffoldSelected() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/auth"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/auth/AuthController.java"),
+                "package {{packageName}}.auth;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of("AuthController")), false);
+
+        assertTrue(Files.exists(output.resolve("src/main/java/dev/example/demo/app/auth/AuthController.java")));
+    }
+
+    @Test
+    void skipsAuthControllerWhenScaffoldNotSelected() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/auth"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/auth/AuthController.java"),
+                "package {{packageName}}.auth;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of()), false);
+
+        assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/auth/AuthController.java")));
+    }
+
     private static ProjectConfig config(Path output) {
         return config(output, ProjectConfig.AuthStyle.jwt, List.of());
     }
