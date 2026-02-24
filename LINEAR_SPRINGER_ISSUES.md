@@ -1,0 +1,67 @@
+# Springer Project Issues (Linear)
+
+Source project: https://linear.app/nexus586/project/springer-504e5d415aff
+
+- NEX-131: Configure GraalVM native-image build pipeline
+- NEX-140: Implement InitializrClient using Java HttpClient
+- NEX-130: Initialize Gradle project with .gradle.kts build file
+- NEX-148: Implement template overlay engine with placeholder interpolation
+- NEX-132: Add TamboUI, PicoCLI, and maven-model dependencies
+- NEX-133: Set up project package structure
+- NEX-191: Scaffold rate-limiting filter and config (Bucket4j)
+- NEX-186: Integration test: full new command end-to-end with event-driven preset
+- NEX-185: Integration test: full new command end-to-end with web-api preset
+- NEX-154: Create docker-compose.yml template for local dev
+- NEX-156: Implement build file modifier for build.gradle.kts via regex patch
+- NEX-144: Define Preset model record
+- NEX-179: Implement keyboard navigation and focus management across TUI screens
+- NEX-151: Create application-prod.yml template
+- NEX-178: Build Success Summary TUI screen
+- NEX-150: Create application-dev.yml template
+- NEX-153: Create multi-stage Dockerfile template
+- NEX-136: Implement `new` subcommand with all project flags
+- NEX-171: Scaffold event-driven: DeadLetterQueueConfig
+- NEX-173: Build Preset Selection TUI screen
+- NEX-183: Unit tests for build file modifiers (pom.xml and gradle)
+- NEX-158: Scaffold SecurityConfig (JWT variant)
+- NEX-177: Build Progress indicator TUI screen during generation
+- NEX-142: Build ProjectConfig request parameter model
+- NEX-169: Scaffold event-driven: BaseProducer with message wrapper
+- NEX-170: Scaffold event-driven: KafkaTopicConfig
+- NEX-149: Create application.yml base template
+- NEX-161: Scaffold JwtTokenProvider utility class
+- NEX-165: Scaffold SpringDoc OpenAPI configuration class
+- NEX-141: Map internal dependency aliases to Initializr dependency IDs
+- NEX-175: Build Config Form TUI screen
+- NEX-168: Scaffold event-driven: BaseConsumer with retry and error handling
+- NEX-163: Scaffold standard API response wrapper ApiResponse<T>
+- NEX-135: Define root springrad command with PicoCLI
+- NEX-172: Implement TUI entry point and app shell
+- NEX-164: Scaffold AuditableEntity base class
+- NEX-167: Scaffold Flyway initial migration V1__init.sql
+- NEX-176: Build Live Preview TUI panel
+- NEX-155: Implement build file modifier for pom.xml via maven-model
+- NEX-145: Implement preset persistence to ~/.springrad/presets.json
+- NEX-134: Configure GraalVM reflection hints for native compilation
+- NEX-174: Build Dependency Picker TUI screen
+- NEX-184: Unit tests for template overlay engine
+- NEX-143: Handle API errors and connectivity failures gracefully
+- NEX-181: Unit tests for InitializrClient (mocked HTTP)
+- NEX-129: [Architecture] Spring Boot RAD CLI Tool
+- NEX-162: Scaffold global @RestControllerAdvice exception handler
+- NEX-147: Seed default presets (web-api, event-driven) on first run
+- NEX-182: Unit tests for preset load/save/merge logic
+- NEX-146: Implement preset loading and merging with CLI flag overrides
+- NEX-160: Scaffold AuthController with login and register endpoints
+- NEX-166: Scaffold Logback JSON configuration (logback-spring.xml)
+- NEX-190: Write README.md with install and usage instructions
+- NEX-189: Set up GitHub Actions pipeline for native binary builds (Linux, macOS)
+- NEX-188: Configure GraalVM native-image Gradle task for distribution
+- NEX-187: GraalVM native-image smoke test
+- NEX-152: Create .env.example template
+- NEX-180: Apply TCSS styling (theme and layout) to TUI
+- NEX-137: Implement `preset list` subcommand
+- NEX-139: Implement `preset delete` subcommand
+- NEX-157: Implement git init and initial commit after generation
+- NEX-159: Scaffold SecurityConfig (Session variant)
+- NEX-138: Implement `preset save` subcommand
