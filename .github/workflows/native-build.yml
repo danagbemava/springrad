@@ -1,0 +1,46 @@
+name: Native Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  native:
+    name: Native (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: graalvm-community
+          java-version: '21'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: 'true'
+          cache: gradle
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build native binary
+        run: ./gradlew --no-daemon nativeCompile
+
+      - name: Archive native binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: springrad-native-${{ matrix.os }}
+          path: |
+            build/native/nativeCompile/*
+          if-no-files-found: error
