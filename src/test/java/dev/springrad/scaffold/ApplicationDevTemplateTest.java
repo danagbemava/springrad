@@ -2,12 +2,14 @@ package dev.springrad.scaffold;
 
 import dev.springrad.core.ProjectConfig;
 import org.junit.jupiter.api.Test;
+import org.yaml.snakeyaml.Yaml;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ApplicationDevTemplateTest {
@@ -91,5 +93,17 @@ class ApplicationDevTemplateTest {
 
         assertTrue(rendered.contains("kafka:"));
         assertTrue(rendered.contains("bootstrap-servers: localhost:9092"));
+    }
+
+    @Test
+    void devTemplateRendersValidYamlForDatabaseConfig() throws Exception {
+        String template = Files.readString(Path.of("src/main/resources/templates/config/application-dev.yml"));
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(Path.of("src/main/resources/templates"));
+        String rendered = engine.render(
+                template,
+                ApplicationTemplateTest.sampleConfig(ProjectConfig.Database.postgresql, List.of("web", "kafka"))
+        );
+
+        assertDoesNotThrow(() -> new Yaml().load(rendered));
     }
 }

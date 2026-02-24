@@ -13,6 +13,7 @@ import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
 import java.io.ByteArrayOutputStream;
+import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -34,6 +35,8 @@ class NewCommandTest {
     void validFlagsParseAndExecute() {
         Path output = tempDir.resolve("service");
         CommandLine commandLine = new CommandLine(newCommand());
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        commandLine.setOut(new PrintWriter(out, true));
         int exitCode = commandLine.execute(
                 "demo-app",
                 "--preset", "web-api",
@@ -48,7 +51,10 @@ class NewCommandTest {
         );
 
         assertEquals(0, exitCode);
-        assertTrue(java.nio.file.Files.exists(output.resolve("config/application.yml")));
+        String stdout = out.toString();
+        assertTrue(stdout.contains("[1/5] Resolving preset and configuration..."));
+        assertTrue(stdout.contains("[5/5] Finalizing output..."));
+        assertTrue(java.nio.file.Files.exists(output.resolve("src/main/resources/application.yml")));
         assertTrue(java.nio.file.Files.exists(output.resolve("src/main/resources/logback-spring.xml")));
     }
 

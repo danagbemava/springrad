@@ -362,11 +362,20 @@ public final class TemplateOverlayEngine {
 
     private String renderPath(Path relative, ProjectConfig config) {
         String normalized = relative.toString().replace('\\', '/');
-        String rendered = render(normalized, config);
+        String remapped = remapOutputPath(normalized);
+        String rendered = render(remapped, config);
         if ("/".equals(java.io.File.separator)) {
             return rendered;
         }
         return rendered.replace("/", java.io.File.separator);
+    }
+
+    private static String remapOutputPath(String relativePath) {
+        if (relativePath.startsWith("config/application") && relativePath.endsWith(".yml")) {
+            String fileName = relativePath.substring(relativePath.lastIndexOf('/') + 1);
+            return "src/main/resources/" + fileName;
+        }
+        return relativePath;
     }
 
     private ResolvedRoot resolveRoot() throws IOException {

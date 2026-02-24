@@ -4,12 +4,14 @@ import dev.springrad.cli.CliArgs;
 import dev.springrad.core.ProjectConfig;
 import dev.springrad.preset.Preset;
 import org.junit.jupiter.api.Test;
+import org.yaml.snakeyaml.Yaml;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -83,6 +85,18 @@ class ApplicationProdTemplateTest {
         assertFalse(rendered.contains("password: root"));
         assertTrue(rendered.contains("${DB_PASSWORD}"));
         assertTrue(rendered.contains("${JWT_SECRET}"));
+    }
+
+    @Test
+    void prodTemplateRendersValidYamlForDatasourceAndJwtConfig() throws Exception {
+        String template = Files.readString(Path.of("src/main/resources/templates/config/application-prod.yml"));
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(Path.of("src/main/resources/templates"));
+        String rendered = engine.render(
+                template,
+                config(ProjectConfig.AuthStyle.jwt, List.of("web", "security", "kafka"))
+        );
+
+        assertDoesNotThrow(() -> new Yaml().load(rendered));
     }
 
     private static ProjectConfig config(ProjectConfig.AuthStyle authStyle, List<String> dependencies) {

@@ -42,9 +42,9 @@ class NewCommandEventDrivenIntegrationTest {
         );
 
         assertEquals(0, exitCode);
-        assertTrue(Files.exists(output.resolve("config/application.yml")));
-        assertTrue(Files.exists(output.resolve("config/application-dev.yml")));
-        assertTrue(Files.exists(output.resolve("config/application-prod.yml")));
+        assertTrue(Files.exists(output.resolve("src/main/resources/application.yml")));
+        assertTrue(Files.exists(output.resolve("src/main/resources/application-dev.yml")));
+        assertTrue(Files.exists(output.resolve("src/main/resources/application-prod.yml")));
         assertTrue(Files.exists(output.resolve("config/.env.example")));
         assertTrue(Files.exists(output.resolve("docker/docker-compose.kafka.yml")));
         assertTrue(Files.exists(output.resolve("src/main/resources/logback-spring.xml")));

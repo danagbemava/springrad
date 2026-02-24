@@ -124,10 +124,15 @@ public final class NewCommand implements Callable<Integer> {
         }
 
         try {
+            spec.commandLine().getOut().println("[1/5] Resolving preset and configuration...");
             ProjectConfig config = presetService.resolve(resolvedPresetName, cliArgs);
+            spec.commandLine().getOut().println("[2/5] Generating base Spring project from Initializr...");
             projectGenerator.generate(config);
+            spec.commandLine().getOut().println("[3/5] Applying template overlays and scaffolds...");
             templateOverlayEngine.overlay(config, false);
+            spec.commandLine().getOut().println("[4/5] Initializing git repository...");
             gitInitializer.initializeRepository(config.outputDirectory(), spec.commandLine().getErr());
+            spec.commandLine().getOut().println("[5/5] Finalizing output...");
             spec.commandLine().getOut().printf("Project generated at %s%n", config.outputDirectory());
             return 0;
         } catch (SpringRadException e) {

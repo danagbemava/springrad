@@ -33,6 +33,24 @@ class TemplateOverlayEngineTest {
     }
 
     @Test
+    void writesApplicationYamlFilesIntoResourcesDirectory() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("config"));
+        Files.writeString(templates.resolve("config/application.yml"), "spring: {}");
+        Files.writeString(templates.resolve("config/application-dev.yml"), "spring: {}");
+        Files.writeString(templates.resolve("config/application-prod.yml"), "spring: {}");
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output), false);
+
+        assertTrue(Files.exists(output.resolve("src/main/resources/application.yml")));
+        assertTrue(Files.exists(output.resolve("src/main/resources/application-dev.yml")));
+        assertTrue(Files.exists(output.resolve("src/main/resources/application-prod.yml")));
+        assertFalse(Files.exists(output.resolve("config/application.yml")));
+    }
+
+    @Test
     void doesNotOverwriteExistingFileWithoutForce() throws Exception {
         Path templates = tempDir.resolve("templates");
         Files.createDirectories(templates.resolve("config"));
