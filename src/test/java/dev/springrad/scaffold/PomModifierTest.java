@@ -81,6 +81,51 @@ class PomModifierTest {
         assertEquals(original, Files.readString(pom));
     }
 
+    @Test
+    void setParentVersionUpdatesParentOnly() throws Exception {
+        Path pom = writePom(basePom());
+        PomModifier modifier = new PomModifier(pom);
+
+        modifier.setParentVersion("3.4.5");
+        modifier.save();
+
+        String updated = Files.readString(pom);
+        assertTrue(updated.contains("<version>3.4.5</version>"));
+        assertTrue(updated.contains("<artifactId>spring-boot-starter-parent</artifactId>"));
+    }
+
+    @Test
+    void addPluginDoesNotDuplicateExistingPlugin() throws Exception {
+        String pomContent = """
+                <project xmlns="http://maven.apache.org/POM/4.0.0"
+                         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+                  <modelVersion>4.0.0</modelVersion>
+                  <groupId>dev.springrad</groupId>
+                  <artifactId>demo</artifactId>
+                  <version>0.1.0-SNAPSHOT</version>
+                  <build>
+                    <plugins>
+                      <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <version>3.4.1</version>
+                      </plugin>
+                    </plugins>
+                  </build>
+                </project>
+                """;
+        Path pom = writePom(pomContent);
+        PomModifier modifier = new PomModifier(pom);
+
+        modifier.addPlugin("org.springframework.boot", "spring-boot-maven-plugin", "3.4.1");
+        modifier.save();
+
+        String updated = Files.readString(pom);
+        String needle = "<artifactId>spring-boot-maven-plugin</artifactId>";
+        assertEquals(updated.indexOf(needle), updated.lastIndexOf(needle));
+    }
+
     private Path writePom(String content) throws Exception {
         Path pom = tempDir.resolve("pom.xml");
         Files.writeString(pom, content);

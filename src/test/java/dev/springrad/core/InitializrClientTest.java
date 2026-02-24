@@ -104,6 +104,22 @@ class InitializrClientTest {
         }
     }
 
+    @Test
+    void unsafeZipEntryThrowsGenerationIOException() throws Exception {
+        byte[] zip = zipBytes(new Entry("../escape.txt", "oops"));
+        HttpServer server = startServer(exchange -> writeResponse(exchange, 200, zip));
+        try {
+            InitializrClient client = new InitializrClient(serverUri(server));
+            GenerationIOException exception = assertThrows(
+                    GenerationIOException.class,
+                    () -> client.generate(sampleConfig(tempDir.resolve("generated")))
+            );
+            assertTrue(exception.getUserMessage().contains("invalid archive"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private static URI serverUri(HttpServer server) {
         return URI.create("http://localhost:" + server.getAddress().getPort());
     }

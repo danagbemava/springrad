@@ -90,6 +90,65 @@ class GradleKtsModifierTest {
         assertEquals(original, Files.readString(buildFile));
     }
 
+    @Test
+    void setDependencyVersionOnlyUpdatesTargetDependency() throws Exception {
+        String content = """
+                dependencies {
+                    implementation("com.a:one:1.0.0")
+                    implementation("com.b:two:2.0.0")
+                }
+                """;
+        Path buildFile = writeBuild(content);
+        GradleKtsModifier modifier = new GradleKtsModifier(buildFile);
+
+        modifier.setDependencyVersion("com.b", "two", "2.1.0");
+
+        String updated = Files.readString(buildFile);
+        assertTrue(updated.contains("com.a:one:1.0.0"));
+        assertTrue(updated.contains("com.b:two:2.1.0"));
+    }
+
+    @Test
+    void addToVersionCatalogAddsAliasWhenCatalogExists() throws Exception {
+        Path buildFile = writeBuild(standardBuild());
+        Path catalog = tempDir.resolve("gradle/libs.versions.toml");
+        Files.createDirectories(catalog.getParent());
+        Files.writeString(catalog, "[versions]\nexisting = \"1.0.0\"\n");
+        GradleKtsModifier modifier = new GradleKtsModifier(
+                buildFile,
+                catalog,
+                GradleKtsModifier.AtomicWriter.defaultWriter(),
+                Logger.getLogger("GradleKtsModifierTest")
+        );
+
+        modifier.addToVersionCatalog("springdoc", "2.3.0");
+
+        String updated = Files.readString(catalog);
+        assertTrue(updated.contains("springdoc = \"2.3.0\""));
+    }
+
+    @Test
+    void missingVersionCatalogLogsWarningAndSkips() throws Exception {
+        Path buildFile = writeBuild(standardBuild());
+        Logger logger = Logger.getLogger("GradleKtsModifierCatalogLogger");
+        CapturingHandler handler = new CapturingHandler();
+        logger.addHandler(handler);
+        logger.setUseParentHandlers(false);
+        try {
+            GradleKtsModifier modifier = new GradleKtsModifier(
+                    buildFile,
+                    tempDir.resolve("gradle/missing.toml"),
+                    GradleKtsModifier.AtomicWriter.defaultWriter(),
+                    logger
+            );
+            modifier.addToVersionCatalog("x", "1.0.0");
+            assertTrue(handler.messages.stream().anyMatch(m -> m.contains("Version catalog not found")));
+        } finally {
+            logger.removeHandler(handler);
+            logger.setUseParentHandlers(true);
+        }
+    }
+
     private Path writeBuild(String content) throws Exception {
         Path buildFile = tempDir.resolve("build.gradle.kts");
         Files.writeString(buildFile, content, StandardCharsets.UTF_8);

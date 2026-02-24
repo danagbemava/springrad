@@ -7,6 +7,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -60,5 +61,26 @@ class GitInitializerTest {
 
         assertEquals("1", count.stdout().trim());
         assertTrue(log.stdout().contains(GitInitializer.INITIAL_COMMIT_MESSAGE));
+    }
+
+    @Test
+    void gitAddFailurePrintsWarningAndSkipsCommit() {
+        List<List<String>> commands = new ArrayList<>();
+        GitInitializer initializer = new GitInitializer((wd, cmd) -> {
+            commands.add(cmd);
+            if (cmd.equals(List.of("git", "--version"))) {
+                return new GitCommandRunner.CommandResult(0, "git version 2.0", "");
+            }
+            if (cmd.equals(List.of("git", "add", "."))) {
+                return new GitCommandRunner.CommandResult(1, "", "add failed");
+            }
+            return new GitCommandRunner.CommandResult(0, "", "");
+        });
+        StringWriter warnings = new StringWriter();
+
+        initializer.initializeRepository(tempDir, new PrintWriter(warnings, true));
+
+        assertTrue(warnings.toString().contains("git step failed: git add ."));
+        assertTrue(commands.stream().noneMatch(c -> c.contains("commit")));
     }
 }
