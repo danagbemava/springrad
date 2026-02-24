@@ -6,6 +6,7 @@ import dev.springrad.core.ProjectGenerator;
 import dev.springrad.core.SpringRadException;
 import dev.springrad.preset.PresetRepository;
 import dev.springrad.preset.PresetService;
+import dev.springrad.tui.SpringRadTuiApp;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
@@ -13,6 +14,7 @@ import picocli.CommandLine;
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -90,5 +92,44 @@ class NewCommandTest {
         assertEquals(1, exitCode);
         assertTrue(output.contains("friendly boom"));
         assertTrue(output.contains("SpringRadException"));
+    }
+
+    @Test
+    void interactiveModeUsesSelectionFromTui() {
+        PresetRepository repository = new PresetRepository(tempDir.resolve("presets.json"));
+        PresetService presetService = new PresetService(repository);
+        AtomicReference<ProjectConfig> captured = new AtomicReference<>();
+        ProjectGenerator generator = config -> {
+            captured.set(config);
+            return new GenerationResult(config.outputDirectory(), List.of());
+        };
+        SpringRadTuiApp tui = new SpringRadTuiApp() {
+            @Override
+            public InteractiveSelection start(String initialName, List<String> availablePresets) {
+                CliArgs args = new CliArgs(
+                        "demo",
+                        "dev.acme",
+                        "interactive-app",
+                        "21",
+                        null,
+                        ProjectConfig.Packaging.jar,
+                        ProjectConfig.BuildTool.gradle,
+                        ProjectConfig.AuthStyle.session,
+                        ProjectConfig.Database.mysql,
+                        List.of("web"),
+                        List.of(),
+                        tempDir.resolve("generated")
+                );
+                return new InteractiveSelection("web-api", args);
+            }
+        };
+        NewCommand command = new NewCommand(presetService, generator, new dev.springrad.core.GitInitializer(), tui);
+        CommandLine commandLine = new CommandLine(command);
+
+        int exitCode = commandLine.execute("ignored", "--interactive");
+
+        assertEquals(0, exitCode);
+        assertEquals("interactive-app", captured.get().artifactId());
+        assertEquals(ProjectConfig.AuthStyle.session, captured.get().authStyle());
     }
 }

@@ -22,19 +22,30 @@ public final class NewCommand implements Callable<Integer> {
     private final PresetService presetService;
     private final ProjectGenerator projectGenerator;
     private final GitInitializer gitInitializer;
+    private final SpringRadTuiApp tuiApp;
 
     public NewCommand() {
-        this(new PresetService(), new InitializrClient(), new GitInitializer());
+        this(new PresetService(), new InitializrClient(), new GitInitializer(), new SpringRadTuiApp());
     }
 
     NewCommand(PresetService presetService, ProjectGenerator projectGenerator) {
-        this(presetService, projectGenerator, new GitInitializer());
+        this(presetService, projectGenerator, new GitInitializer(), new SpringRadTuiApp());
     }
 
     NewCommand(PresetService presetService, ProjectGenerator projectGenerator, GitInitializer gitInitializer) {
+        this(presetService, projectGenerator, gitInitializer, new SpringRadTuiApp());
+    }
+
+    NewCommand(
+            PresetService presetService,
+            ProjectGenerator projectGenerator,
+            GitInitializer gitInitializer,
+            SpringRadTuiApp tuiApp
+    ) {
         this.presetService = presetService;
         this.projectGenerator = projectGenerator;
         this.gitInitializer = gitInitializer;
+        this.tuiApp = tuiApp;
     }
 
     @Spec
@@ -81,21 +92,30 @@ public final class NewCommand implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        if (interactive) {
-            new SpringRadTuiApp().start();
-            return 0;
-        }
+        CliArgs cliArgs;
+        String resolvedPresetName = presetName;
 
-        if (presetName == null) {
-            spec.commandLine().getErr().println(
-                    "No preset provided. Use --interactive for guided mode or pass --preset <name>."
-            );
-            return 1;
+        if (interactive) {
+            SpringRadTuiApp.InteractiveSelection selection = tuiApp.start(name, presetService.listPresetNames());
+            if (selection == null) {
+                spec.commandLine().getErr().println("Interactive generation cancelled.");
+                return 1;
+            }
+            cliArgs = selection.cliArgs();
+            resolvedPresetName = selection.presetName();
+        } else {
+            if (presetName == null) {
+                spec.commandLine().getErr().println(
+                        "No preset provided. Use --interactive for guided mode or pass --preset <name>."
+                );
+                return 1;
+            }
+
+            cliArgs = toCliArgs();
         }
 
         try {
-            CliArgs cliArgs = toCliArgs();
-            ProjectConfig config = presetService.resolve(presetName, cliArgs);
+            ProjectConfig config = presetService.resolve(resolvedPresetName, cliArgs);
             projectGenerator.generate(config);
             gitInitializer.initializeRepository(config.outputDirectory(), spec.commandLine().getErr());
             spec.commandLine().getOut().printf("Project generated at %s%n", config.outputDirectory());

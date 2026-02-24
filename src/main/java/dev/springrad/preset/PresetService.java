@@ -4,6 +4,7 @@ import dev.springrad.cli.CliArgs;
 import dev.springrad.core.ProjectConfig;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 public final class PresetService {
@@ -35,6 +36,14 @@ public final class PresetService {
                 : repository.findByName(presetName)
                 .orElseThrow(() -> new IllegalArgumentException("Preset not found: " + presetName));
         return ProjectConfig.merge(preset, overrides);
+    }
+
+    public List<String> listPresetNames() {
+        seedDefaults();
+        return repository.findAll().stream()
+                .map(Preset::name)
+                .sorted(Comparator.naturalOrder())
+                .toList();
     }
 
     static List<Preset> builtInPresets() {
