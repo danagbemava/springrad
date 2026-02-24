@@ -4,6 +4,11 @@ import dev.springrad.core.ProjectConfig;
 import dev.springrad.preset.Preset;
 import dev.springrad.preset.PresetRepository;
 import dev.springrad.preset.PresetService;
+import dev.springrad.tui.app.AppAction;
+import dev.springrad.tui.app.AppRoute;
+import dev.springrad.tui.app.AppShell;
+import dev.springrad.tui.app.AppState;
+import dev.springrad.tui.app.AppStore;
 import dev.tamboui.style.Color;
 import dev.tamboui.toolkit.app.ToolkitApp;
 import dev.tamboui.toolkit.element.Element;
@@ -20,7 +25,6 @@ import java.util.List;
 import static dev.tamboui.toolkit.Toolkit.column;
 import static dev.tamboui.toolkit.Toolkit.columns;
 import static dev.tamboui.toolkit.Toolkit.form;
-import static dev.tamboui.toolkit.Toolkit.panel;
 import static dev.tamboui.toolkit.Toolkit.text;
 
 public final class PresetTuiApp {
@@ -39,6 +43,7 @@ public final class PresetTuiApp {
     }
 
     public void start() {
+        AppStore store = new AppStore(AppState.initial(AppRoute.preset_manager));
         presetService.seedDefaults();
         FormState formState = FormState.builder()
                 .selectField("action", List.of("list", "save", "delete", "quit"), 0)
@@ -58,6 +63,7 @@ public final class PresetTuiApp {
             activity.add("Preset manager started.");
             activityLogStore.append("Preset manager started.");
         }
+        store.dispatch(AppAction.setStatus("Preset manager ready"));
         ToolkitApp app = new ToolkitApp() {
             @Override
             protected TuiConfig configure() {
@@ -100,9 +106,11 @@ public final class PresetTuiApp {
                                     if (presets.isEmpty()) {
                                         activity.add("No presets found.");
                                         activityLogStore.append("No presets found.");
+                                        store.dispatch(AppAction.setStatus("No presets found"));
                                     } else {
                                         activity.add("Presets:");
                                         activityLogStore.append("Listing presets.");
+                                        store.dispatch(AppAction.setStatus("Listing presets"));
                                         for (Preset preset : presets) {
                                             String row = "- %s%s (%s/%s) deps=%s".formatted(
                                                     preset.name(),
@@ -121,12 +129,14 @@ public final class PresetTuiApp {
                                     if (name == null || name.isBlank()) {
                                         activity.add("Cannot save: preset name is required.");
                                         activityLogStore.append("Cannot save preset: missing name.");
+                                        store.dispatch(AppAction.setStatus("Save failed: missing preset name"));
                                         return;
                                     }
                                     Preset existing = repository.findByName(name).orElse(null);
                                     if (existing != null && existing.builtIn()) {
                                         activity.add("Cannot overwrite built-in preset: " + name);
                                         activityLogStore.append("Cannot overwrite built-in preset: " + name);
+                                        store.dispatch(AppAction.setStatus("Save failed: built-in preset"));
                                         return;
                                     }
                                     Preset preset = new Preset(
@@ -145,29 +155,35 @@ public final class PresetTuiApp {
                                     repository.save(preset);
                                     activity.add("Saved preset: " + preset.name());
                                     activityLogStore.append("Saved preset: " + preset.name());
+                                    store.dispatch(AppAction.setStatus("Saved preset: " + preset.name()));
                                 }
                                 case "delete" -> {
                                     String name = submitted.textValue("name");
                                     if (name == null || name.isBlank()) {
                                         activity.add("Cannot delete: preset name is required.");
                                         activityLogStore.append("Cannot delete preset: missing name.");
+                                        store.dispatch(AppAction.setStatus("Delete failed: missing preset name"));
                                         return;
                                     }
                                     if (repository.delete(name.trim())) {
                                         activity.add("Deleted preset: " + name.trim());
                                         activityLogStore.append("Deleted preset: " + name.trim());
+                                        store.dispatch(AppAction.setStatus("Deleted preset: " + name.trim()));
                                     } else {
                                         activity.add("Delete failed (not found or built-in): " + name.trim());
                                         activityLogStore.append("Delete failed (not found or built-in): " + name.trim());
+                                        store.dispatch(AppAction.setStatus("Delete failed: not found or built-in"));
                                     }
                                 }
                                 case "quit" -> {
                                     activityLogStore.append("Preset manager exited by user.");
+                                    store.dispatch(AppAction.setStatus("Exiting preset manager"));
                                     quit();
                                 }
                                 default -> {
                                     activity.add("Unknown action: " + action);
                                     activityLogStore.append("Unknown preset action: " + action);
+                                    store.dispatch(AppAction.setStatus("Unknown action"));
                                 }
                             }
                         });
@@ -182,22 +198,19 @@ public final class PresetTuiApp {
                     logLines.add(text("No activity yet. Choose an action and press ENTER.").gray());
                 }
 
-                return column(
-                        panel(" PRESET MANAGEMENT ",
-                                text("Manage presets using TUI actions").bold().white(),
-                                text("Actions: list, save, delete, quit").cyan(),
-                                text(""),
-                                columns(
-                                        presetForm.percent(65),
-                                        column(
-                                                text("Activity").bold().magenta(),
-                                                column(logLines.toArray(new Element[0])).spacing(0)
-                                        ).percent(35)
-                                ).spacing(1),
-                                text(""),
-                                text("Use TAB/Shift+TAB to navigate fields, arrows for selects, ENTER to execute action.").gray()
-                        ).doubleBorder().borderColor(Color.CYAN).padding(1)
-                ).spacing(1);
+                return AppShell.render(
+                        "Preset Management",
+                        "Manage presets with one unified flow",
+                        columns(
+                                presetForm.percent(65),
+                                column(
+                                        text("Activity").bold().magenta(),
+                                        column(logLines.toArray(new Element[0])).spacing(0)
+                                ).percent(35)
+                        ).spacing(1),
+                        store.state().status(),
+                        "Keys: TAB/Shift+TAB to navigate, arrows for selects, ENTER to execute action"
+                );
             }
         };
 

@@ -1,5 +1,10 @@
 package dev.springrad.tui;
 
+import dev.springrad.tui.app.AppAction;
+import dev.springrad.tui.app.AppRoute;
+import dev.springrad.tui.app.AppShell;
+import dev.springrad.tui.app.AppState;
+import dev.springrad.tui.app.AppStore;
 import dev.tamboui.style.Color;
 import dev.tamboui.toolkit.app.ToolkitApp;
 import dev.tamboui.toolkit.event.EventResult;
@@ -14,7 +19,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static dev.tamboui.toolkit.Toolkit.column;
 import static dev.tamboui.toolkit.Toolkit.form;
-import static dev.tamboui.toolkit.Toolkit.panel;
 import static dev.tamboui.toolkit.Toolkit.text;
 
 public final class CommandCenterTuiApp {
@@ -25,6 +29,7 @@ public final class CommandCenterTuiApp {
     }
 
     public Action start() {
+        AppStore store = new AppStore(AppState.initial(AppRoute.command_center));
         FormState formState = FormState.builder()
                 .selectField("action", List.of("generate_project", "manage_presets", "quit"), 0)
                 .build();
@@ -51,6 +56,7 @@ public final class CommandCenterTuiApp {
                         .onSubmit(submitted -> {
                             String raw = submitted.selectValue("action");
                             selection.set(Action.valueOf(raw));
+                            store.dispatch(AppAction.setStatus("Selected action: " + raw));
                             quit();
                         })
                         .onKeyEvent(event -> {
@@ -62,16 +68,17 @@ public final class CommandCenterTuiApp {
                         });
                 actionFormRef[0] = actionForm;
 
-                return column(
-                        panel(" SPRINGRAD COMMAND CENTER ",
-                                text("Everything managed through TUI").bold().white(),
-                                text("Choose an action and press ENTER").cyan(),
+                return AppShell.render(
+                        "Command Center",
+                        "Everything managed through TUI",
+                        column(
+                                text("Choose an action and press ENTER").white(),
                                 text(""),
-                                actionForm,
-                                text(""),
-                                text("Use TAB/Shift+TAB and arrow keys. ENTER confirms.").gray()
-                        ).doubleBorder().borderColor(Color.CYAN).padding(1)
-                ).spacing(1);
+                                actionForm
+                        ).spacing(1),
+                        store.state().status(),
+                        "Keys: TAB/Shift+TAB to navigate, arrows to change select, ENTER to confirm"
+                );
             }
         };
 

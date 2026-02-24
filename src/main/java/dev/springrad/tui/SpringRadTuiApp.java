@@ -2,6 +2,11 @@ package dev.springrad.tui;
 
 import dev.springrad.cli.CliArgs;
 import dev.springrad.core.ProjectConfig;
+import dev.springrad.tui.app.AppAction;
+import dev.springrad.tui.app.AppRoute;
+import dev.springrad.tui.app.AppShell;
+import dev.springrad.tui.app.AppState;
+import dev.springrad.tui.app.AppStore;
 import dev.tamboui.style.Color;
 import dev.tamboui.toolkit.event.EventResult;
 import dev.tamboui.toolkit.app.ToolkitApp;
@@ -30,8 +35,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import static dev.tamboui.toolkit.Toolkit.column;
 import static dev.tamboui.toolkit.Toolkit.columns;
 import static dev.tamboui.toolkit.Toolkit.form;
-import static dev.tamboui.toolkit.Toolkit.panel;
-import static dev.tamboui.toolkit.Toolkit.spacer;
 import static dev.tamboui.toolkit.Toolkit.text;
 
 public class SpringRadTuiApp {
@@ -80,6 +83,7 @@ public class SpringRadTuiApp {
 
         @Override
         public InteractiveSelection start(String initialName, List<String> availablePresets) {
+            AppStore store = new AppStore(AppState.initial(AppRoute.project_wizard));
             if (availablePresets == null || availablePresets.isEmpty()) {
                 throw new IllegalArgumentException("No presets available for interactive mode");
             }
@@ -140,37 +144,34 @@ public class SpringRadTuiApp {
                             })
                             .onSubmit(submitted -> {
                                 selectionRef.set(toSelection(submitted, availablePresets));
+                                store.dispatch(AppAction.setStatus("Project configuration submitted"));
                                 quit();
                             });
                     interactiveFormRef[0] = interactiveForm;
 
-                    return column(
-                            panel(" SPRINGRAD ",
-                                    text("Scaffold production-ready Spring Boot projects").bold().white(),
-                                    text("Preset-driven generation with live preview").cyan(),
-                                    text(""),
-                                    columns(
-                                            interactiveForm.percent(68),
-                                            column(
-                                                    text("Preview").bold().magenta(),
-                                                    text("Preset:       " + value(formState.selectValue("preset"), "web-api")).yellow(),
-                                                    text("Name:         " + value(formState.textValue("name"), "springrad-app")).white(),
-                                                    text("Group:        " + value(formState.textValue("groupId"), "com.example")),
-                                                    text("Artifact:     " + value(formState.textValue("artifactId"), "springrad-app")).green(),
-                                                    text("Java:         " + value(formState.textValue("javaVersion"), "21")),
-                                                    text("Boot:         " + value(formState.textValue("bootVersion"), "latest")),
-                                                    text("Build:        " + value(formState.selectValue("buildTool"), "gradle")),
-                                                    text("Auth:         " + value(formState.selectValue("authStyle"), "jwt")),
-                                                    text("Database:     " + value(formState.selectValue("database"), "postgresql")),
-                                                    text("Dependencies: " + value(formState.textValue("dependencies"), "(preset defaults)")),
-                                                    text("Output:       " + value(formState.textValue("outputDirectory"), "./springrad-app")).cyan()
-                                            ).percent(32)
-                                    ).spacing(1),
-                                    text(""),
-                                    text("Keys: TAB/Shift+TAB to navigate, arrows to move selects, ENTER to generate").gray(),
-                                    text("Tip: leave optional fields blank to use preset defaults").gray()
-                            ).doubleBorder().borderColor(Color.CYAN).padding(1)
-                    ).spacing(1);
+                    return AppShell.render(
+                            "Project Wizard",
+                            "Preset-driven generation with live preview",
+                            columns(
+                                    interactiveForm.percent(68),
+                                    column(
+                                            text("Preview").bold().magenta(),
+                                            text("Preset:       " + value(formState.selectValue("preset"), "web-api")).yellow(),
+                                            text("Name:         " + value(formState.textValue("name"), "springrad-app")).white(),
+                                            text("Group:        " + value(formState.textValue("groupId"), "com.example")),
+                                            text("Artifact:     " + value(formState.textValue("artifactId"), "springrad-app")).green(),
+                                            text("Java:         " + value(formState.textValue("javaVersion"), "21")),
+                                            text("Boot:         " + value(formState.textValue("bootVersion"), "latest")),
+                                            text("Build:        " + value(formState.selectValue("buildTool"), "gradle")),
+                                            text("Auth:         " + value(formState.selectValue("authStyle"), "jwt")),
+                                            text("Database:     " + value(formState.selectValue("database"), "postgresql")),
+                                            text("Dependencies: " + value(formState.textValue("dependencies"), "(preset defaults)")),
+                                            text("Output:       " + value(formState.textValue("outputDirectory"), "./springrad-app")).cyan()
+                                    ).percent(32)
+                            ).spacing(1),
+                            store.state().status(),
+                            "Keys: TAB/Shift+TAB to navigate, arrows for selects, ENTER to generate"
+                    );
                 }
             };
 
@@ -184,6 +185,7 @@ public class SpringRadTuiApp {
 
         @Override
         public <T> T runWithProgress(String title, ProgressTask<T> task) throws Exception {
+            AppStore store = new AppStore(AppState.initial(AppRoute.progress));
             AtomicReference<T> resultRef = new AtomicReference<>();
             AtomicReference<Exception> failureRef = new AtomicReference<>();
             AtomicReference<String> currentStepText = new AtomicReference<>("Preparing...");
@@ -213,6 +215,7 @@ public class SpringRadTuiApp {
                                         currentStepText.set(message);
                                         logs.add("[%d/%d] %s".formatted(step, total, message));
                                         activityLogStore.append("[%d/%d] %s".formatted(step, total, message));
+                                        store.dispatch(AppAction.setStatus("Running step " + step + " of " + total));
                                     });
                                 }
 
@@ -221,6 +224,7 @@ public class SpringRadTuiApp {
                                     runner().runOnRenderThread(() -> {
                                         logs.add("  - " + message);
                                         activityLogStore.append("  - " + message);
+                                        store.dispatch(AppAction.appendActivity(message));
                                     });
                                 }
                             });
@@ -229,6 +233,7 @@ public class SpringRadTuiApp {
                                 statusText.set("Completed (press ENTER to close)");
                                 awaitingConfirmation.set(true);
                                 activityLogStore.append("Generation completed. Awaiting user confirmation to exit.");
+                                store.dispatch(AppAction.setStatus("Completed"));
                             });
                         } catch (Exception e) {
                             failureRef.set(e);
@@ -237,6 +242,7 @@ public class SpringRadTuiApp {
                                 logs.add("Error: " + e.getMessage());
                                 awaitingConfirmation.set(true);
                                 activityLogStore.append("Generation failed: " + e.getMessage());
+                                store.dispatch(AppAction.setStatus("Failed"));
                             });
                         }
                     }, "springrad-tui-progress-worker");
@@ -261,20 +267,20 @@ public class SpringRadTuiApp {
                         logItems.add(text("Waiting for execution steps...").gray());
                     }
 
-                    return column(
-                            panel(" " + title + " ",
-                                    text("SpringRad execution progress").bold().white(),
-                                    text("Updates refresh for each sub-step and file operation").cyan()
-                            ).doubleBorder().borderColor(Color.CYAN).padding(1),
-                            panel(" Current Step ",
+                    return AppShell.render(
+                            title,
+                            "Execution updates stream in real time",
+                            column(
                                     text("Step: " + (total == 0 ? "-" : (step + "/" + total))).yellow(),
                                     text(stepText).white(),
                                     text("Status: " + statusText.get()).green(),
-                                    text(awaitingConfirmation.get() ? "Confirm exit: press ENTER" : "Please wait...").gray()
-                            ).rounded().borderColor(Color.LIGHT_BLUE).padding(1),
-                            panel(" Activity Log ",
+                                    text(awaitingConfirmation.get() ? "Confirm exit: press ENTER" : "Please wait...").gray(),
+                                    text(""),
+                                    text("Activity log").magenta(),
                                     column(logItems.toArray(new Element[0])).spacing(0)
-                            ).rounded().borderColor(Color.LIGHT_MAGENTA).padding(1)
+                            ).spacing(0),
+                            store.state().status(),
+                            "Sub-steps include file writes and initialization actions"
                     )
                             .spacing(1)
                             .focusable(true)
