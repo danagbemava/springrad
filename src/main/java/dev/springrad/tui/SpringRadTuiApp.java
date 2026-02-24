@@ -2,8 +2,10 @@ package dev.springrad.tui;
 
 import dev.springrad.cli.CliArgs;
 import dev.springrad.core.ProjectConfig;
+import dev.tamboui.backend.panama.PanamaBackendProvider;
 import dev.tamboui.toolkit.app.ToolkitApp;
 import dev.tamboui.toolkit.elements.FormElement;
+import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.widgets.form.FieldType;
 import dev.tamboui.widgets.form.FormState;
 
@@ -78,20 +80,31 @@ public class SpringRadTuiApp {
             AtomicReference<InteractiveSelection> selectionRef = new AtomicReference<>();
             ToolkitApp app = new ToolkitApp() {
                 @Override
+                protected TuiConfig configure() {
+                    try {
+                        return TuiConfig.builder()
+                                .backend(new PanamaBackendProvider().create())
+                                .build();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException("Failed to initialize TamboUI backend", e);
+                    }
+                }
+
+                @Override
                 protected dev.tamboui.toolkit.element.Element render() {
                     FormElement interactiveForm = form(formState)
-                            .field("Preset", "preset", FieldType.SELECT)
-                            .field("Project name", "name")
-                            .field("Group ID", "groupId")
-                            .field("Artifact ID", "artifactId")
-                            .field("Java version", "javaVersion")
-                            .field("Boot version", "bootVersion")
-                            .field("Packaging", "packaging", FieldType.SELECT)
-                            .field("Build tool", "buildTool", FieldType.SELECT)
-                            .field("Auth style", "authStyle", FieldType.SELECT)
-                            .field("Database", "database", FieldType.SELECT)
-                            .field("Dependencies (CSV)", "dependencies")
-                            .field("Output directory", "outputDirectory")
+                            .field("preset", "Preset", FieldType.SELECT)
+                            .field("name", "Project name")
+                            .field("groupId", "Group ID")
+                            .field("artifactId", "Artifact ID")
+                            .field("javaVersion", "Java version")
+                            .field("bootVersion", "Boot version")
+                            .field("packaging", "Packaging", FieldType.SELECT)
+                            .field("buildTool", "Build tool", FieldType.SELECT)
+                            .field("authStyle", "Auth style", FieldType.SELECT)
+                            .field("database", "Database", FieldType.SELECT)
+                            .field("dependencies", "Dependencies (CSV)")
+                            .field("outputDirectory", "Output directory")
                             .submitOnEnter(true)
                             .arrowNavigation(true)
                             .onSubmit(submitted -> {

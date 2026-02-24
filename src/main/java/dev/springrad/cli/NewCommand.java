@@ -54,7 +54,12 @@ public final class NewCommand implements Callable<Integer> {
     @Parameters(index = "0", paramLabel = "<name>", description = "Project name")
     String name;
 
-    @Option(names = {"--interactive", "-i"}, description = "Start interactive TUI flow", defaultValue = "false")
+    @Option(
+            names = {"--interactive", "-i"},
+            description = "Start interactive TUI flow",
+            defaultValue = "false",
+            arity = "0"
+    )
     boolean interactive;
 
     @Option(names = {"--preset", "-p"}, description = "Named preset to use")
