@@ -123,6 +123,38 @@ class TemplateOverlayEngineTest {
         assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/security/SecurityConfigJwt.java")));
     }
 
+    @Test
+    void rendersSessionSecurityTemplateWhenSelectedAndSessionAuth() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/security"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/security/SecurityConfigSession.java"),
+                "package {{packageName}}.security;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.session, List.of("SecurityConfigSession")), false);
+
+        assertTrue(Files.exists(output.resolve("src/main/java/dev/example/demo/app/security/SecurityConfigSession.java")));
+    }
+
+    @Test
+    void skipsSessionSecurityTemplateWhenAuthStyleIsJwt() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/security"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/security/SecurityConfigSession.java"),
+                "package {{packageName}}.security;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of("SecurityConfigSession")), false);
+
+        assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/security/SecurityConfigSession.java")));
+    }
+
     private static ProjectConfig config(Path output) {
         return config(output, ProjectConfig.AuthStyle.jwt, List.of());
     }

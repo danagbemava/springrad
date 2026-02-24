@@ -291,6 +291,12 @@ public final class TemplateOverlayEngine {
         if ("SecurityConfigJwt.java".equals(fileName) && !config.scaffolds().contains("SecurityConfigJwt")) {
             return true;
         }
+        if ("SecurityConfigSession.java".equals(fileName) && config.authStyle() != ProjectConfig.AuthStyle.session) {
+            return true;
+        }
+        if ("SecurityConfigSession.java".equals(fileName) && !config.scaffolds().contains("SecurityConfigSession")) {
+            return true;
+        }
         return false;
     }
 
