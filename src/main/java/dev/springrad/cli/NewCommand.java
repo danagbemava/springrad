@@ -6,6 +6,7 @@ import dev.springrad.core.InitializrClient;
 import dev.springrad.core.SpringRadException;
 import dev.springrad.core.GitInitializer;
 import dev.springrad.preset.PresetService;
+import dev.springrad.scaffold.TemplateOverlayEngine;
 import dev.springrad.tui.SpringRadTuiApp;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -23,29 +24,32 @@ public final class NewCommand implements Callable<Integer> {
     private final ProjectGenerator projectGenerator;
     private final GitInitializer gitInitializer;
     private final SpringRadTuiApp tuiApp;
+    private final TemplateOverlayEngine templateOverlayEngine;
 
     public NewCommand() {
-        this(new PresetService(), new InitializrClient(), new GitInitializer(), new SpringRadTuiApp());
+        this(new PresetService(), new InitializrClient(), new GitInitializer(), new SpringRadTuiApp(), new TemplateOverlayEngine());
     }
 
     NewCommand(PresetService presetService, ProjectGenerator projectGenerator) {
-        this(presetService, projectGenerator, new GitInitializer(), new SpringRadTuiApp());
+        this(presetService, projectGenerator, new GitInitializer(), new SpringRadTuiApp(), new TemplateOverlayEngine());
     }
 
     NewCommand(PresetService presetService, ProjectGenerator projectGenerator, GitInitializer gitInitializer) {
-        this(presetService, projectGenerator, gitInitializer, new SpringRadTuiApp());
+        this(presetService, projectGenerator, gitInitializer, new SpringRadTuiApp(), new TemplateOverlayEngine());
     }
 
     NewCommand(
             PresetService presetService,
             ProjectGenerator projectGenerator,
             GitInitializer gitInitializer,
-            SpringRadTuiApp tuiApp
+            SpringRadTuiApp tuiApp,
+            TemplateOverlayEngine templateOverlayEngine
     ) {
         this.presetService = presetService;
         this.projectGenerator = projectGenerator;
         this.gitInitializer = gitInitializer;
         this.tuiApp = tuiApp;
+        this.templateOverlayEngine = templateOverlayEngine;
     }
 
     @Spec
@@ -122,6 +126,7 @@ public final class NewCommand implements Callable<Integer> {
         try {
             ProjectConfig config = presetService.resolve(resolvedPresetName, cliArgs);
             projectGenerator.generate(config);
+            templateOverlayEngine.overlay(config, false);
             gitInitializer.initializeRepository(config.outputDirectory(), spec.commandLine().getErr());
             spec.commandLine().getOut().printf("Project generated at %s%n", config.outputDirectory());
             return 0;

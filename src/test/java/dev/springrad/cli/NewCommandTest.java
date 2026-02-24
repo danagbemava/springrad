@@ -6,6 +6,7 @@ import dev.springrad.core.ProjectGenerator;
 import dev.springrad.core.SpringRadException;
 import dev.springrad.preset.PresetRepository;
 import dev.springrad.preset.PresetService;
+import dev.springrad.scaffold.TemplateOverlayEngine;
 import dev.springrad.tui.SpringRadTuiApp;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -31,6 +32,7 @@ class NewCommandTest {
 
     @Test
     void validFlagsParseAndExecute() {
+        Path output = tempDir.resolve("service");
         CommandLine commandLine = new CommandLine(newCommand());
         int exitCode = commandLine.execute(
                 "demo-app",
@@ -41,10 +43,13 @@ class NewCommandTest {
                 "--packaging", "jar",
                 "--build", "gradle",
                 "--auth", "jwt",
-                "--database", "postgresql"
+                "--database", "postgresql",
+                "--output", output.toString()
         );
 
         assertEquals(0, exitCode);
+        assertTrue(java.nio.file.Files.exists(output.resolve("config/application.yml")));
+        assertTrue(java.nio.file.Files.exists(output.resolve("src/main/resources/logback-spring.xml")));
     }
 
     @Test
@@ -123,7 +128,13 @@ class NewCommandTest {
                 return new InteractiveSelection("web-api", args);
             }
         };
-        NewCommand command = new NewCommand(presetService, generator, new dev.springrad.core.GitInitializer(), tui);
+        NewCommand command = new NewCommand(
+                presetService,
+                generator,
+                new dev.springrad.core.GitInitializer(),
+                tui,
+                new TemplateOverlayEngine()
+        );
         CommandLine commandLine = new CommandLine(command);
 
         int exitCode = commandLine.execute("ignored", "--interactive");
