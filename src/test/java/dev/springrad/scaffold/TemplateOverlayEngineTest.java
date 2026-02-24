@@ -319,6 +319,38 @@ class TemplateOverlayEngineTest {
         assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/config/OpenApiConfig.java")));
     }
 
+    @Test
+    void rendersAuditableEntityWhenScaffoldSelected() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/domain"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/domain/AuditableEntity.java"),
+                "package {{packageName}}.domain;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of("AuditableEntity")), false);
+
+        assertTrue(Files.exists(output.resolve("src/main/java/dev/example/demo/app/domain/AuditableEntity.java")));
+    }
+
+    @Test
+    void skipsAuditableEntityWhenScaffoldNotSelected() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/domain"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/domain/AuditableEntity.java"),
+                "package {{packageName}}.domain;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of()), false);
+
+        assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/domain/AuditableEntity.java")));
+    }
+
     private static ProjectConfig config(Path output) {
         return config(output, ProjectConfig.AuthStyle.jwt, List.of());
     }

@@ -315,6 +315,9 @@ public final class TemplateOverlayEngine {
         if ("OpenApiConfig.java".equals(fileName) && !config.scaffolds().contains("OpenApiConfig")) {
             return true;
         }
+        if ("AuditableEntity.java".equals(fileName) && !config.scaffolds().contains("AuditableEntity")) {
+            return true;
+        }
         return false;
     }
 

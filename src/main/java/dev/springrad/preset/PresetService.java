@@ -65,7 +65,8 @@ public final class PresetService {
                                 "AuthController",
                                 "ApiResponse",
                                 "GlobalExceptionHandler",
-                                "OpenApiConfig"
+                                "OpenApiConfig",
+                                "AuditableEntity"
                         )
                 ),
                 new Preset(
@@ -84,6 +85,7 @@ public final class PresetService {
                                 "JwtTokenProvider",
                                 "ApiResponse",
                                 "GlobalExceptionHandler",
+                                "AuditableEntity",
                                 "BaseConsumer",
                                 "BaseProducer",
                                 "DeadLetterQueueConfig",
