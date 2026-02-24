@@ -51,7 +51,8 @@ public final class TemplateOverlayEngine {
                     if (shouldSkipTemplate(relative, config)) {
                         return;
                     }
-                    Path target = targetRoot.resolve(relative.toString());
+                    String renderedRelative = renderPath(relative, config);
+                    Path target = targetRoot.resolve(renderedRelative);
                     if (Files.isDirectory(path)) {
                         Files.createDirectories(target);
                         return;
@@ -94,6 +95,7 @@ public final class TemplateOverlayEngine {
         values.put("artifactId", config.artifactId());
         values.put("groupId", config.groupId());
         values.put("packageName", packageName(config.groupId(), config.artifactId()));
+        values.put("packagePath", packageName(config.groupId(), config.artifactId()).replace('.', '/'));
         values.put("javaVersion", config.javaVersion());
         values.put("bootVersion", config.bootVersion());
         values.put("authStyle", config.authStyle().name());
@@ -283,7 +285,22 @@ public final class TemplateOverlayEngine {
         if ("docker-compose.kafka.yml".equals(fileName) && !config.dependencies().contains("kafka")) {
             return true;
         }
+        if ("SecurityConfigJwt.java".equals(fileName) && config.authStyle() != ProjectConfig.AuthStyle.jwt) {
+            return true;
+        }
+        if ("SecurityConfigJwt.java".equals(fileName) && !config.scaffolds().contains("SecurityConfigJwt")) {
+            return true;
+        }
         return false;
+    }
+
+    private String renderPath(Path relative, ProjectConfig config) {
+        String normalized = relative.toString().replace('\\', '/');
+        String rendered = render(normalized, config);
+        if ("/".equals(java.io.File.separator)) {
+            return rendered;
+        }
+        return rendered.replace("/", java.io.File.separator);
     }
 
     private ResolvedRoot resolveRoot() throws IOException {

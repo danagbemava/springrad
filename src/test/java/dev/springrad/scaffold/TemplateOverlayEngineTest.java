@@ -12,6 +12,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TemplateOverlayEngineTest {
@@ -74,7 +75,59 @@ class TemplateOverlayEngineTest {
         assertArrayEquals(binary, copied);
     }
 
+    @Test
+    void rendersPackagePathPlaceholderInTargetPath() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/security"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/security/SecurityConfigJwt.java"),
+                "package {{packageName}}.security;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of("SecurityConfigJwt")), false);
+
+        assertTrue(Files.exists(output.resolve("src/main/java/dev/example/demo/app/security/SecurityConfigJwt.java")));
+    }
+
+    @Test
+    void skipsJwtSecurityTemplateWhenScaffoldNotSelected() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/security"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/security/SecurityConfigJwt.java"),
+                "package {{packageName}}.security;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.jwt, List.of()), false);
+
+        assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/security/SecurityConfigJwt.java")));
+    }
+
+    @Test
+    void skipsJwtSecurityTemplateWhenAuthStyleIsNotJwt() throws Exception {
+        Path templates = tempDir.resolve("templates");
+        Files.createDirectories(templates.resolve("src/main/java/{{packagePath}}/security"));
+        Files.writeString(
+                templates.resolve("src/main/java/{{packagePath}}/security/SecurityConfigJwt.java"),
+                "package {{packageName}}.security;"
+        );
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(templates);
+        Path output = tempDir.resolve("out");
+        engine.overlay(config(output, ProjectConfig.AuthStyle.session, List.of("SecurityConfigJwt")), false);
+
+        assertFalse(Files.exists(output.resolve("src/main/java/dev/example/demo/app/security/SecurityConfigJwt.java")));
+    }
+
     private static ProjectConfig config(Path output) {
+        return config(output, ProjectConfig.AuthStyle.jwt, List.of());
+    }
+
+    private static ProjectConfig config(Path output, ProjectConfig.AuthStyle authStyle, List<String> scaffolds) {
         return ProjectConfig.merge(
                 Preset.named("test"),
                 new CliArgs(
@@ -85,10 +138,10 @@ class TemplateOverlayEngineTest {
                         "3.4.1",
                         ProjectConfig.Packaging.jar,
                         ProjectConfig.BuildTool.gradle,
-                        ProjectConfig.AuthStyle.jwt,
+                        authStyle,
                         ProjectConfig.Database.postgresql,
                         List.of("web"),
-                        List.of(),
+                        scaffolds,
                         output
                 )
         );
