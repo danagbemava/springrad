@@ -1,6 +1,7 @@
 plugins {
     application
     java
+    jacoco
 }
 
 group = "dev.springrad"
@@ -52,4 +53,18 @@ tasks.processResources {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(false)
+    }
+    doLast {
+        val htmlIndex = reports.html.outputLocation.get().file("index.html").asFile
+        println("Coverage report: ${htmlIndex.absolutePath}")
+    }
 }
