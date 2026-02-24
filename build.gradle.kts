@@ -45,6 +45,49 @@ application {
     mainClass.set("dev.springrad.Main")
 }
 
+val nativeOutputDir = layout.buildDirectory.dir("native/nativeCompile")
+
+tasks.register<Exec>("nativeCompile") {
+    group = "build"
+    description = "Builds a GraalVM native image for springrad in build/native/nativeCompile."
+    dependsOn(tasks.jar)
+
+    val jarTask = tasks.named<Jar>("jar")
+    val runtimeClasspath = sourceSets.main.get().runtimeClasspath
+
+    val classpath = files(jarTask.flatMap { it.archiveFile }, runtimeClasspath)
+        .asPath
+    val outputDir = nativeOutputDir.get().asFile
+    val binaryName = "springrad"
+
+    doFirst {
+        outputDir.mkdirs()
+        commandLine(
+            "native-image",
+            "--no-fallback",
+            "-H:Name=$binaryName",
+            "-cp",
+            classpath,
+            application.mainClass.get()
+        )
+        workingDir(outputDir)
+    }
+}
+
+tasks.register<Exec>("nativeTest") {
+    group = "verification"
+    description = "Runs a smoke test for the native binary by printing --help."
+    dependsOn("nativeCompile")
+
+    val binary = nativeOutputDir.map { dir ->
+        dir.file("springrad").asFile.absolutePath
+    }
+
+    doFirst {
+        commandLine(binary.get(), "--help")
+    }
+}
+
 tasks.processResources {
     filesMatching("version.properties") {
         expand("version" to project.version)
