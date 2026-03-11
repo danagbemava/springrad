@@ -62,7 +62,7 @@ public final class TemplateOverlayEngine {
         }
 
         try {
-            applyFromRoot(templateDirectory, config.outputDirectory(), config, true, true, progress);
+            applyFromRoot(templateDirectory, config.outputDirectory(), config, force, true, progress);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to overlay templates from " + templateDirectory, e);
         }

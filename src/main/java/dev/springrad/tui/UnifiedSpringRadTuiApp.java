@@ -454,29 +454,35 @@ public final class UnifiedSpringRadTuiApp {
 
                         Path userTemplateDir = globalConfig.templateDir();
                         int totalSteps = userTemplateDir != null ? 6 : 5;
-
-                        runner().runOnRenderThread(() -> {
-                            appendActivity(activity, "[3/" + totalSteps + "] Applying built-in template overlays and scaffolds");
-                            store.dispatch(AppAction.setStatus("Running step 3 of " + totalSteps));
-                            progressStep.set(3);
-                            progressTotal.set(totalSteps);
-                            progressMessage.set("Applying built-in template overlays");
-                        });
-                        templateOverlayEngine.overlay(config, false, detail -> runner().runOnRenderThread(() -> appendActivity(activity, "  - " + detail)));
+                        int step = 3;
 
                         if (userTemplateDir != null) {
+                            int s = step;
                             runner().runOnRenderThread(() -> {
-                                appendActivity(activity, "[4/" + totalSteps + "] Applying user templates from " + userTemplateDir);
-                                store.dispatch(AppAction.setStatus("Running step 4 of " + totalSteps));
-                                progressStep.set(4);
+                                appendActivity(activity, "[" + s + "/" + totalSteps + "] Applying user templates from " + userTemplateDir);
+                                store.dispatch(AppAction.setStatus("Running step " + s + " of " + totalSteps));
+                                progressStep.set(s);
+                                progressTotal.set(totalSteps);
                                 progressMessage.set("Applying user templates");
                             });
                             templateOverlayEngine.overlayDirectory(userTemplateDir, config, false,
                                     detail -> runner().runOnRenderThread(() -> appendActivity(activity, "  - " + detail)));
+                            step++;
                         }
 
-                        int gitStep = userTemplateDir != null ? 5 : 4;
-                        int finalStep = userTemplateDir != null ? 6 : 5;
+                        int builtinStep = step;
+                        runner().runOnRenderThread(() -> {
+                            appendActivity(activity, "[" + builtinStep + "/" + totalSteps + "] Applying built-in template overlays and scaffolds");
+                            store.dispatch(AppAction.setStatus("Running step " + builtinStep + " of " + totalSteps));
+                            progressStep.set(builtinStep);
+                            progressTotal.set(totalSteps);
+                            progressMessage.set("Applying built-in template overlays");
+                        });
+                        templateOverlayEngine.overlay(config, false, detail -> runner().runOnRenderThread(() -> appendActivity(activity, "  - " + detail)));
+                        step++;
+
+                        int gitStep = step;
+                        int finalStep = step + 1;
 
                         runner().runOnRenderThread(() -> {
                             appendActivity(activity, "[" + gitStep + "/" + totalSteps + "] Initializing git repository");
