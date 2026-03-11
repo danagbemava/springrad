@@ -128,6 +128,9 @@ public final class UnifiedSpringRadTuiApp {
         AtomicReference<UiTheme> themeRef = new AtomicReference<>(UiTheme.ocean);
         StyleEngine styleEngine = UiStyles.createEngine();
         AtomicReference<String> lastAppliedPreset = new AtomicReference<>("");
+        AtomicBoolean helpVisible = new AtomicBoolean(false);
+        AtomicReference<String> formError = new AtomicReference<>(null);
+        AtomicReference<String> generatedOutputPath = new AtomicReference<>(null);
 
         List<String> activity = Collections.synchronizedList(new ArrayList<>(activityLogStore.tail(60)));
         if (activity.isEmpty()) {
@@ -241,6 +244,8 @@ public final class UnifiedSpringRadTuiApp {
                             switch (action) {
                                 case "/generate", "generate_project" -> {
                                     quitArmed.set(false);
+                                    helpVisible.set(false);
+                                    formError.set(null);
                                     List<String> freshPresets = presetService.listPresetNames();
                                     projectFormRef.set(buildProjectFormState(
                                             freshPresets, javaVersions, bootVersions, defaultName, defaultArtifact, cfgDefaults));
@@ -251,13 +256,15 @@ public final class UnifiedSpringRadTuiApp {
                                 }
                                 case "/presets", "manage_presets" -> {
                                     quitArmed.set(false);
+                                    helpVisible.set(false);
                                     routeRef.set(AppRoute.preset_manager);
                                     store.dispatch(AppAction.navigate(AppRoute.preset_manager));
                                     store.dispatch(AppAction.setStatus("Preset manager"));
                                 }
                                 case "/help" -> {
                                     quitArmed.set(false);
-                                    store.dispatch(AppAction.setStatus("Type / to browse commands, TAB to autocomplete"));
+                                    helpVisible.set(!helpVisible.get());
+                                    store.dispatch(AppAction.setStatus(helpVisible.get() ? "Showing help" : "Ready"));
                                 }
                                 case "/quit", "/exit", "quit" -> {
                                     if (!quitArmed.get()) {
@@ -290,15 +297,44 @@ public final class UnifiedSpringRadTuiApp {
                 String commandInput = value(commandFormState.textValue("command"), "");
                 List<CommandDoc> filteredCommands = filterSlashCommands(commandInput, CommandRegistry.COMMAND_CENTER);
 
-                Element body = column(
-                        text(""),
-                        ThemeText.paint("Generate, scaffold, and configure projects from one place.", selectedTheme.primaryText()),
-                        ThemeText.paint("Type / to browse commands. TAB to autocomplete.", selectedTheme.mutedText()),
-                        ThemeText.paint("Current theme: " + selectedTheme.label(), selectedTheme.titleAccent()),
-                        text(""),
-                        actionForm,
-                        renderCommandSuggestions(filteredCommands, selectedTheme)
-                ).spacing(1);
+                List<Element> bodyItems = new ArrayList<>();
+                bodyItems.add(text(""));
+                bodyItems.add(ThemeText.paint("Generate, scaffold, and configure projects from one place.", selectedTheme.primaryText()));
+                bodyItems.add(row(
+                        ThemeText.paint("/generate", selectedTheme.successAccent()),
+                        ThemeText.paint(" Project Wizard    ", selectedTheme.mutedText()),
+                        ThemeText.paint("/presets", selectedTheme.successAccent()),
+                        ThemeText.paint(" Manage Presets    ", selectedTheme.mutedText()),
+                        ThemeText.paint("/help", selectedTheme.successAccent()),
+                        ThemeText.paint(" Toggle Help", selectedTheme.mutedText())
+                ));
+                bodyItems.add(text(""));
+                bodyItems.add(actionForm);
+                bodyItems.add(renderCommandSuggestions(filteredCommands, selectedTheme));
+
+                if (helpVisible.get()) {
+                    bodyItems.add(panel(" HELP ",
+                            column(
+                                    ThemeText.paint("Getting Started", selectedTheme.titleAccent()),
+                                    ThemeText.paint("  1. Type /generate to open the Project Wizard", selectedTheme.primaryText()),
+                                    ThemeText.paint("  2. Select a preset, customize fields, and press ENTER", selectedTheme.primaryText()),
+                                    ThemeText.paint("  3. Your project is generated with templates and git init", selectedTheme.primaryText()),
+                                    text(""),
+                                    ThemeText.paint("Navigation", selectedTheme.titleAccent()),
+                                    ThemeText.paint("  /generate    Open Project Wizard to scaffold a new project", selectedTheme.primaryText()),
+                                    ThemeText.paint("  /presets     Open Preset Manager to save/delete presets", selectedTheme.primaryText()),
+                                    ThemeText.paint("  /theme X     Switch theme (ocean, graphite, neon)", selectedTheme.primaryText()),
+                                    ThemeText.paint("  /quit        Exit SpringRad", selectedTheme.primaryText()),
+                                    text(""),
+                                    ThemeText.paint("Tips", selectedTheme.titleAccent()),
+                                    ThemeText.paint("  TAB          Autocomplete the current command", selectedTheme.primaryText()),
+                                    ThemeText.paint("  ESC          Go back from any screen", selectedTheme.primaryText()),
+                                    ThemeText.paint("  Type /       Show command suggestions", selectedTheme.primaryText())
+                            ).spacing(0)
+                    ).rounded().borderColor(selectedTheme.panelBorder()).padding(1));
+                }
+
+                Element body = column(bodyItems.toArray(new Element[0])).spacing(1);
 
                 return AppShell.render(
                         "Command Center",
@@ -321,8 +357,12 @@ public final class UnifiedSpringRadTuiApp {
                 String currentPreset = projectFormState.selectValue("preset");
                 if (currentPreset != null && !currentPreset.equals(lastAppliedPreset.get())) {
                     lastAppliedPreset.set(currentPreset);
-                    presetService.findByName(currentPreset).ifPresent(p ->
-                            applyPresetToForm(projectFormState, p, javaVersions, bootVersions));
+                    presetService.findByName(currentPreset).ifPresent(p -> {
+                        applyPresetToForm(projectFormState, p, javaVersions, bootVersions);
+                        int depCount = p.dependencies() != null ? p.dependencies().size() : 0;
+                        store.dispatch(AppAction.setStatus("Loaded preset: " + p.name()
+                                + " (" + depCount + " deps, " + p.authStyle() + ", " + p.database() + ")"));
+                    });
                 }
 
                 final FormElement[] formRef = new FormElement[1];
@@ -367,31 +407,56 @@ public final class UnifiedSpringRadTuiApp {
                 String scaffoldsInput = value(projectFormState.textValue("scaffolds"), "");
                 Element depSuggestions = renderDepSuggestions(depsInput, dependencyCatalog, theme);
 
-                Element wizardBody = compact
-                        ? projectForm
-                        : columns(
-                                projectForm.percent(65),
-                                column(
-                                        panel(" PREVIEW ",
-                                                ThemeText.paint(previewLine("Preset", value(projectFormState.selectValue("preset"), "web-api")), theme.statusAccent()),
-                                                ThemeText.paint(previewLine("Name", value(projectFormState.textValue("name"), "springrad-app")), theme.primaryText()),
-                                                text(previewLine("Group", value(projectFormState.textValue("groupId"), "com.example"))),
-                                                ThemeText.paint(previewLine("Artifact", value(projectFormState.textValue("artifactId"), "springrad-app")), theme.successAccent()),
-                                                text(previewLine("Java", projectFormState.selectValue("javaVersion"))),
-                                                text(previewLine("Boot", projectFormState.selectValue("bootVersion"))),
-                                                text(previewLine("Build", value(projectFormState.selectValue("buildTool"), "gradle"))),
-                                                text(previewLine("Auth", value(projectFormState.selectValue("authStyle"), "jwt"))),
-                                                text(previewLine("Database", value(projectFormState.selectValue("database"), "postgresql"))),
-                                                text(previewLine("Deps", depsInput.isEmpty() ? "(preset defaults)" : depsInput)),
-                                                text(previewLine("Scaffolds", scaffoldsInput.isEmpty() ? "(preset defaults)" : scaffoldsInput)),
-                                                ThemeText.paint(previewLine("Output", value(projectFormState.textValue("outputDirectory"), "./springrad-app")), theme.panelBorder())
-                                        )
-                                                .rounded()
-                                                .borderColor(theme.panelBorder())
-                                                .padding(1),
-                                        depSuggestions
-                                ).spacing(1).percent(35)
-                          ).spacing(1);
+                String currentError = formError.get();
+                Element errorBanner = currentError != null
+                        ? ThemeText.paint("  ✗ " + currentError, theme.errorText())
+                        : text("");
+
+                Element wizardBody;
+                if (compact) {
+                    wizardBody = column(errorBanner, projectForm).spacing(0);
+                } else {
+                    wizardBody = column(
+                            errorBanner,
+                            columns(
+                                    projectForm.percent(65),
+                                    column(
+                                            panel(" PREVIEW ",
+                                                    ThemeText.paint(previewLine("Preset", value(projectFormState.selectValue("preset"), "web-api")), theme.statusAccent()),
+                                                    ThemeText.paint(previewLine("Name", value(projectFormState.textValue("name"), "springrad-app")), theme.primaryText()),
+                                                    text(previewLine("Group", value(projectFormState.textValue("groupId"), "com.example"))),
+                                                    ThemeText.paint(previewLine("Artifact", value(projectFormState.textValue("artifactId"), "springrad-app")), theme.successAccent()),
+                                                    text(previewLine("Java", projectFormState.selectValue("javaVersion"))),
+                                                    text(previewLine("Boot", projectFormState.selectValue("bootVersion"))),
+                                                    text(previewLine("Build", value(projectFormState.selectValue("buildTool"), "gradle"))),
+                                                    text(previewLine("Auth", value(projectFormState.selectValue("authStyle"), "jwt"))),
+                                                    text(previewLine("Database", value(projectFormState.selectValue("database"), "postgresql"))),
+                                                    text(previewLine("Deps", depsInput.isEmpty() ? "(preset defaults)" : depsInput)),
+                                                    text(previewLine("Scaffolds", scaffoldsInput.isEmpty() ? "(none)" : scaffoldsInput)),
+                                                    ThemeText.paint(previewLine("Output", value(projectFormState.textValue("outputDirectory"), "./springrad-app")), theme.panelBorder())
+                                            )
+                                                    .rounded()
+                                                    .borderColor(theme.panelBorder())
+                                                    .padding(1),
+                                            panel(" FIELD GUIDE ",
+                                                    ThemeText.paint("Dependencies   Comma-separated Initializr IDs", theme.mutedText()),
+                                                    ThemeText.paint("               e.g. web,security,data-jpa", theme.mutedText()),
+                                                    ThemeText.paint("Scaffolds      Code templates to include:", theme.mutedText()),
+                                                    ThemeText.paint("               SecurityConfigJwt, AuthController,", theme.mutedText()),
+                                                    ThemeText.paint("               ApiResponse, GlobalExceptionHandler,", theme.mutedText()),
+                                                    ThemeText.paint("               OpenApiConfig, AuditableEntity,", theme.mutedText()),
+                                                    ThemeText.paint("               FlywayInitMigration, KafkaTopicConfig,", theme.mutedText()),
+                                                    ThemeText.paint("               BaseProducer, BaseConsumer,", theme.mutedText()),
+                                                    ThemeText.paint("               RateLimitingFilter, LogbackJsonConfig", theme.mutedText())
+                                            )
+                                                    .rounded()
+                                                    .borderColor(theme.panelBorder())
+                                                    .padding(1),
+                                            depSuggestions
+                                    ).spacing(1).percent(35)
+                            ).spacing(1)
+                    ).spacing(0);
+                }
 
                 return AppShell.render(
                         "Project Wizard",
@@ -412,9 +477,11 @@ public final class UnifiedSpringRadTuiApp {
 
                 String validationError = validateProjectForm(submitted, dependencyCatalog, aliasRegistry);
                 if (validationError != null) {
+                    formError.set(validationError);
                     store.dispatch(AppAction.setStatus(validationError));
                     return;
                 }
+                formError.set(null);
 
                 generationRunning.set(true);
                 awaitingProgressConfirm.set(false);
@@ -495,6 +562,7 @@ public final class UnifiedSpringRadTuiApp {
                         });
                         gitInitializer.initializeRepository(config.outputDirectory(), new PrintWriter(System.err, true));
 
+                        generatedOutputPath.set(config.outputDirectory().toString());
                         runner().runOnRenderThread(() -> {
                             appendActivity(activity, "[" + finalStep + "/" + totalSteps + "] Finalizing output");
                             appendActivity(activity, "  - Generation complete: " + config.outputDirectory());
@@ -522,6 +590,7 @@ public final class UnifiedSpringRadTuiApp {
 
             private Element renderPresetManager(int terminalRows) {
                 UiTheme theme = themeRef.get();
+                boolean compact = terminalRows < 40;
                 final FormElement[] formRef = new FormElement[1];
                 FormElement presetForm = form(presetFormState)
                         .field("command", "Command")
@@ -535,7 +604,7 @@ public final class UnifiedSpringRadTuiApp {
                         .field("buildTool", "Build Tool", FieldType.SELECT)
                         .field("packaging", "Packaging", FieldType.SELECT)
                         .labelWidth(22)
-                        .fieldSpacing(terminalRows < 40 ? 0 : 1)
+                        .fieldSpacing(compact ? 0 : 1)
                         .rounded()
                         .borderColor(theme.panelBorder())
                         .focusedBorderColor(theme.panelAccentBorder())
@@ -561,34 +630,56 @@ public final class UnifiedSpringRadTuiApp {
                 String presetDepsInput = value(presetFormState.textValue("deps"), "");
                 Element presetDepSuggestions = renderDepSuggestions(presetDepsInput, dependencyCatalog, theme);
 
-                List<String> activityLines = new ArrayList<>();
-                synchronized (activity) {
-                    activityLines.addAll(activity);
+                // Build inline preset list
+                List<Preset> allPresets = presetRepository.findAll();
+                List<String> presetLines = new ArrayList<>();
+                for (Preset p : allPresets) {
+                    String marker = p.builtIn() ? " [built-in]" : "";
+                    presetLines.add(p.name() + marker);
+                    presetLines.add("  " + p.authStyle() + "/" + p.database()
+                            + " deps=" + String.join(",", p.dependencies()));
                 }
-                if (activityLines.isEmpty()) {
-                    activityLines.add("No activity yet.");
+                if (presetLines.isEmpty()) {
+                    presetLines.add("No presets saved yet.");
                 }
+
+                Element rightPanel;
+                if (compact) {
+                    rightPanel = column(
+                            renderCommandSuggestions(filteredCommands, theme),
+                            presetDepSuggestions
+                    ).spacing(1).percent(38);
+                } else {
+                    rightPanel = column(
+                            renderCommandSuggestions(filteredCommands, theme),
+                            presetDepSuggestions,
+                            panel(" SAVED PRESETS ",
+                                    list(presetLines)
+                                            .id("preset-list")
+                                            .scrollbar()
+                                            .displayOnly()
+                            ).rounded().borderColor(theme.panelBorder()).padding(1)
+                    ).spacing(1).percent(38);
+                }
+
+                Element actionHints = row(
+                        ThemeText.paint("/save", theme.successAccent()),
+                        ThemeText.paint(" Save preset    ", theme.mutedText()),
+                        ThemeText.paint("/delete", theme.successAccent()),
+                        ThemeText.paint(" Delete by name    ", theme.mutedText()),
+                        ThemeText.paint("ESC", theme.successAccent()),
+                        ThemeText.paint(" Back", theme.mutedText())
+                );
 
                 return AppShell.render(
                         "Preset Management",
-                        "List, save, and delete presets without leaving the app",
-                        columns(
-                                presetForm.percent(62),
-                                column(
-                                        renderCommandSuggestions(filteredCommands, theme),
-                                        presetDepSuggestions,
-                                        ThemeText.paint("Recent Activity", theme.titleAccent()),
-                                        list(activityLines)
-                                                .id("activity-list")
-                                                .scrollbar()
-                                                .scrollToEnd()
-                                                .rounded()
-                                                .borderColor(theme.panelBorder())
-                                                .displayOnly()
-                                ).spacing(1).percent(38)
+                        "Save reusable project configurations as presets",
+                        column(
+                                actionHints,
+                                columns(presetForm.percent(62), rightPanel).spacing(1)
                         ).spacing(1),
                         store.state().status(),
-                        "/help for commands, ENTER execute, ESC back",
+                        "Type /save or /delete in Command field, then ENTER",
                         theme,
                         2,
                         terminalRows
@@ -602,23 +693,10 @@ public final class UnifiedSpringRadTuiApp {
                 }
                 switch (action) {
                     case "/list", "list" -> {
-                        List<Preset> presets = presetRepository.findAll();
-                        if (presets.isEmpty()) {
-                            appendActivity(activity, "No presets found.");
-                            store.dispatch(AppAction.setStatus("No presets found"));
-                        } else {
-                            appendActivity(activity, "Presets:");
-                            for (Preset preset : presets) {
-                                appendActivity(activity, "- %s%s (%s/%s) deps=%s".formatted(
-                                        preset.name(),
-                                        preset.builtIn() ? " [built-in]" : "",
-                                        preset.authStyle(),
-                                        preset.database(),
-                                        String.join(",", preset.dependencies())
-                                ));
-                            }
-                            store.dispatch(AppAction.setStatus("Listed presets"));
-                        }
+                        int count = presetRepository.findAll().size();
+                        store.dispatch(AppAction.setStatus(count == 0
+                                ? "No presets found"
+                                : count + " preset(s) — see SAVED PRESETS panel"));
                     }
                     case "/save", "save" -> {
                         String name = submitted.textValue("name");
@@ -660,6 +738,11 @@ public final class UnifiedSpringRadTuiApp {
                         presetRepository.save(preset);
                         appendActivity(activity, "Saved preset: " + preset.name());
                         store.dispatch(AppAction.setStatus("Saved preset: " + preset.name()));
+                        // Clear form fields after successful save
+                        presetFormState.setTextValue("command", "");
+                        presetFormState.setTextValue("name", "");
+                        presetFormState.setTextValue("deps", "");
+                        presetFormState.setTextValue("groupId", "");
                     }
                     case "/delete", "delete" -> {
                         String name = submitted.textValue("name");
@@ -728,10 +811,28 @@ public final class UnifiedSpringRadTuiApp {
                     ).rounded().borderColor(theme.errorText()).padding(1));
                 }
 
-                if (awaiting) {
+                if (awaiting && !failed) {
+                    String outputPath = generatedOutputPath.get();
+                    if (outputPath != null) {
+                        progressItems.add(panel(" NEXT STEPS ",
+                                column(
+                                        ThemeText.paint("Your project is ready!", theme.successAccent()),
+                                        text(""),
+                                        ThemeText.paint("  cd " + outputPath, theme.titleAccent()),
+                                        ThemeText.paint("  ./gradlew bootRun", theme.titleAccent()),
+                                        text(""),
+                                        ThemeText.paint("Press ENTER to return to command center", theme.mutedText())
+                                ).spacing(0)
+                        ).rounded().borderColor(theme.successAccent()).padding(1));
+                    } else {
+                        progressItems.add(ThemeText.paint(
+                                "◆ Press ENTER to return to command center",
+                                theme.successAccent()));
+                    }
+                } else if (awaiting) {
                     progressItems.add(ThemeText.paint(
                             "◆ Press ENTER to return to command center",
-                            failed ? theme.errorText() : theme.successAccent()));
+                            theme.errorText()));
                 }
 
                 progressItems.add(text(""));
