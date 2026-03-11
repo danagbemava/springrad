@@ -9,6 +9,10 @@ import dev.springrad.preset.Preset;
 import dev.springrad.preset.PresetRepository;
 import dev.springrad.preset.PresetService;
 import dev.springrad.scaffold.TemplateOverlayEngine;
+import dev.springrad.core.DependencyAliasRegistry;
+import dev.springrad.core.DependencyCatalog;
+import dev.springrad.core.DependencyEntry;
+import dev.springrad.core.GlobalConfig;
 import dev.springrad.core.InitializrMetadataClient;
 import dev.springrad.tui.app.AppAction;
 import dev.springrad.tui.app.AppRoute;
@@ -99,9 +103,14 @@ public final class UnifiedSpringRadTuiApp {
             throw new IllegalStateException("No presets available");
         }
 
+        GlobalConfig globalConfig = presetService.globalConfig();
+        GlobalConfig.Defaults cfgDefaults = globalConfig.defaults();
+
         InitializrMetadataClient metadataClient = new InitializrMetadataClient();
         List<String> javaVersions = metadataClient.fetchJavaVersions();
         List<String> bootVersions = metadataClient.fetchBootVersions();
+        DependencyCatalog dependencyCatalog = metadataClient.fetchDependencyCatalog();
+        DependencyAliasRegistry aliasRegistry = new DependencyAliasRegistry(globalConfig.aliases());
 
         AppStore store = new AppStore(AppState.initial(AppRoute.command_center));
         store.dispatch(AppAction.setStatus("Ready"));
@@ -118,6 +127,7 @@ public final class UnifiedSpringRadTuiApp {
         AtomicInteger progressTotal = new AtomicInteger(0);
         AtomicReference<UiTheme> themeRef = new AtomicReference<>(UiTheme.ocean);
         StyleEngine styleEngine = UiStyles.createEngine();
+        AtomicReference<String> lastAppliedPreset = new AtomicReference<>("");
 
         List<String> activity = Collections.synchronizedList(new ArrayList<>(activityLogStore.tail(60)));
         if (activity.isEmpty()) {
@@ -130,20 +140,8 @@ public final class UnifiedSpringRadTuiApp {
 
         String defaultName = "springrad-app";
         String defaultArtifact = slugify(defaultName);
-        FormState projectFormState = FormState.builder()
-                .selectField("preset", presetNames, 0)
-                .textField("name", defaultName)
-                .textField("groupId", "com.example")
-                .textField("artifactId", defaultArtifact)
-                .selectField("javaVersion", javaVersions, 0)
-                .selectField("bootVersion", bootVersions, 0)
-                .selectField("packaging", List.of("jar", "war"), 0)
-                .selectField("buildTool", List.of("gradle", "maven"), 0)
-                .selectField("authStyle", List.of("jwt", "session", "none"), 0)
-                .selectField("database", List.of("postgresql", "mysql", "h2"), 0)
-                .textField("dependencies", "")
-                .textField("outputDirectory", "./" + defaultArtifact)
-                .build();
+        AtomicReference<FormState> projectFormRef = new AtomicReference<>(
+                buildProjectFormState(presetNames, javaVersions, bootVersions, defaultName, defaultArtifact, cfgDefaults));
 
         FormState presetFormState = FormState.builder()
                 .textField("command", "")
@@ -243,6 +241,10 @@ public final class UnifiedSpringRadTuiApp {
                             switch (action) {
                                 case "/generate", "generate_project" -> {
                                     quitArmed.set(false);
+                                    List<String> freshPresets = presetService.listPresetNames();
+                                    projectFormRef.set(buildProjectFormState(
+                                            freshPresets, javaVersions, bootVersions, defaultName, defaultArtifact, cfgDefaults));
+                                    lastAppliedPreset.set("");
                                     routeRef.set(AppRoute.project_wizard);
                                     store.dispatch(AppAction.navigate(AppRoute.project_wizard));
                                     store.dispatch(AppAction.setStatus("Project wizard"));
@@ -313,6 +315,16 @@ public final class UnifiedSpringRadTuiApp {
             private Element renderProjectWizard(int terminalRows) {
                 UiTheme theme = themeRef.get();
                 boolean compact = terminalRows < 40;
+                FormState projectFormState = projectFormRef.get();
+
+                // Auto-fill form fields when preset selection changes
+                String currentPreset = projectFormState.selectValue("preset");
+                if (currentPreset != null && !currentPreset.equals(lastAppliedPreset.get())) {
+                    lastAppliedPreset.set(currentPreset);
+                    presetService.findByName(currentPreset).ifPresent(p ->
+                            applyPresetToForm(projectFormState, p, javaVersions, bootVersions));
+                }
+
                 final FormElement[] formRef = new FormElement[1];
                 FormElement projectForm = form(projectFormState)
                         .field("preset", "Preset", FieldType.SELECT)
@@ -326,6 +338,7 @@ public final class UnifiedSpringRadTuiApp {
                         .field("authStyle", "Auth style", FieldType.SELECT)
                         .field("database", "Database", FieldType.SELECT)
                         .field("dependencies", "Dependencies (CSV)")
+                        .field("scaffolds", "Scaffolds (CSV)")
                         .field("outputDirectory", "Output directory")
                         .labelWidth(22)
                         .fieldSpacing(compact ? 0 : 1)
@@ -350,27 +363,34 @@ public final class UnifiedSpringRadTuiApp {
                         });
                 formRef[0] = projectForm;
 
+                String depsInput = value(projectFormState.textValue("dependencies"), "");
+                String scaffoldsInput = value(projectFormState.textValue("scaffolds"), "");
+                Element depSuggestions = renderDepSuggestions(depsInput, dependencyCatalog, theme);
+
                 Element wizardBody = compact
                         ? projectForm
                         : columns(
                                 projectForm.percent(65),
-                                panel(" PREVIEW ",
-                                        ThemeText.paint(previewLine("Preset", value(projectFormState.selectValue("preset"), "web-api")), theme.statusAccent()),
-                                        ThemeText.paint(previewLine("Name", value(projectFormState.textValue("name"), "springrad-app")), theme.primaryText()),
-                                        text(previewLine("Group", value(projectFormState.textValue("groupId"), "com.example"))),
-                                        ThemeText.paint(previewLine("Artifact", value(projectFormState.textValue("artifactId"), "springrad-app")), theme.successAccent()),
-                                        text(previewLine("Java", projectFormState.selectValue("javaVersion"))),
-                                        text(previewLine("Boot", projectFormState.selectValue("bootVersion"))),
-                                        text(previewLine("Build", value(projectFormState.selectValue("buildTool"), "gradle"))),
-                                        text(previewLine("Auth", value(projectFormState.selectValue("authStyle"), "jwt"))),
-                                        text(previewLine("Database", value(projectFormState.selectValue("database"), "postgresql"))),
-                                        text(previewLine("Deps", value(projectFormState.textValue("dependencies"), "(preset defaults)"))),
-                                        ThemeText.paint(previewLine("Output", value(projectFormState.textValue("outputDirectory"), "./springrad-app")), theme.panelBorder())
-                                )
-                                        .rounded()
-                                        .borderColor(theme.panelBorder())
-                                        .padding(1)
-                                        .percent(35)
+                                column(
+                                        panel(" PREVIEW ",
+                                                ThemeText.paint(previewLine("Preset", value(projectFormState.selectValue("preset"), "web-api")), theme.statusAccent()),
+                                                ThemeText.paint(previewLine("Name", value(projectFormState.textValue("name"), "springrad-app")), theme.primaryText()),
+                                                text(previewLine("Group", value(projectFormState.textValue("groupId"), "com.example"))),
+                                                ThemeText.paint(previewLine("Artifact", value(projectFormState.textValue("artifactId"), "springrad-app")), theme.successAccent()),
+                                                text(previewLine("Java", projectFormState.selectValue("javaVersion"))),
+                                                text(previewLine("Boot", projectFormState.selectValue("bootVersion"))),
+                                                text(previewLine("Build", value(projectFormState.selectValue("buildTool"), "gradle"))),
+                                                text(previewLine("Auth", value(projectFormState.selectValue("authStyle"), "jwt"))),
+                                                text(previewLine("Database", value(projectFormState.selectValue("database"), "postgresql"))),
+                                                text(previewLine("Deps", depsInput.isEmpty() ? "(preset defaults)" : depsInput)),
+                                                text(previewLine("Scaffolds", scaffoldsInput.isEmpty() ? "(preset defaults)" : scaffoldsInput)),
+                                                ThemeText.paint(previewLine("Output", value(projectFormState.textValue("outputDirectory"), "./springrad-app")), theme.panelBorder())
+                                        )
+                                                .rounded()
+                                                .borderColor(theme.panelBorder())
+                                                .padding(1),
+                                        depSuggestions
+                                ).spacing(1).percent(35)
                           ).spacing(1);
 
                 return AppShell.render(
@@ -390,7 +410,7 @@ public final class UnifiedSpringRadTuiApp {
                     return;
                 }
 
-                String validationError = validateProjectForm(submitted);
+                String validationError = validateProjectForm(submitted, dependencyCatalog, aliasRegistry);
                 if (validationError != null) {
                     store.dispatch(AppAction.setStatus(validationError));
                     return;
@@ -432,27 +452,54 @@ public final class UnifiedSpringRadTuiApp {
                         });
                         projectGenerator.generate(config);
 
+                        Path userTemplateDir = globalConfig.templateDir();
+                        java.util.Set<String> userFiles = userTemplateDir != null
+                                ? templateOverlayEngine.scanUserFiles(java.util.List.of(userTemplateDir), config)
+                                : java.util.Set.of();
+                        int totalSteps = userTemplateDir != null ? 6 : 5;
+                        int step = 3;
+
+                        int builtinStep = step;
                         runner().runOnRenderThread(() -> {
-                            appendActivity(activity, "[3/5] Applying template overlays and scaffolds");
-                            store.dispatch(AppAction.setStatus("Running step 3 of 5"));
-                            progressStep.set(3);
-                            progressMessage.set("Applying template overlays and scaffolds");
+                            appendActivity(activity, "[" + builtinStep + "/" + totalSteps + "] Applying built-in template overlays and scaffolds");
+                            store.dispatch(AppAction.setStatus("Running step " + builtinStep + " of " + totalSteps));
+                            progressStep.set(builtinStep);
+                            progressTotal.set(totalSteps);
+                            progressMessage.set("Applying built-in template overlays");
                         });
-                        templateOverlayEngine.overlay(config, false, detail -> runner().runOnRenderThread(() -> appendActivity(activity, "  - " + detail)));
+                        templateOverlayEngine.overlay(config, false, userFiles, detail -> runner().runOnRenderThread(() -> appendActivity(activity, "  - " + detail)));
+                        step++;
+
+                        if (userTemplateDir != null) {
+                            int s = step;
+                            runner().runOnRenderThread(() -> {
+                                appendActivity(activity, "[" + s + "/" + totalSteps + "] Applying user templates from " + userTemplateDir);
+                                store.dispatch(AppAction.setStatus("Running step " + s + " of " + totalSteps));
+                                progressStep.set(s);
+                                progressTotal.set(totalSteps);
+                                progressMessage.set("Applying user templates");
+                            });
+                            templateOverlayEngine.overlayDirectory(userTemplateDir, config, false,
+                                    detail -> runner().runOnRenderThread(() -> appendActivity(activity, "  - " + detail)));
+                            step++;
+                        }
+
+                        int gitStep = step;
+                        int finalStep = step + 1;
 
                         runner().runOnRenderThread(() -> {
-                            appendActivity(activity, "[4/5] Initializing git repository");
-                            store.dispatch(AppAction.setStatus("Running step 4 of 5"));
-                            progressStep.set(4);
+                            appendActivity(activity, "[" + gitStep + "/" + totalSteps + "] Initializing git repository");
+                            store.dispatch(AppAction.setStatus("Running step " + gitStep + " of " + totalSteps));
+                            progressStep.set(gitStep);
                             progressMessage.set("Initializing git repository");
                         });
                         gitInitializer.initializeRepository(config.outputDirectory(), new PrintWriter(System.err, true));
 
                         runner().runOnRenderThread(() -> {
-                            appendActivity(activity, "[5/5] Finalizing output");
+                            appendActivity(activity, "[" + finalStep + "/" + totalSteps + "] Finalizing output");
                             appendActivity(activity, "  - Generation complete: " + config.outputDirectory());
                             store.dispatch(AppAction.setStatus("Completed"));
-                            progressStep.set(5);
+                            progressStep.set(finalStep);
                             progressMessage.set("Generation complete!");
                             awaitingProgressConfirm.set(true);
                         });
@@ -511,6 +558,8 @@ public final class UnifiedSpringRadTuiApp {
                 formRef[0] = presetForm;
                 String commandInput = value(presetFormState.textValue("command"), "");
                 List<CommandDoc> filteredCommands = filterSlashCommands(commandInput, CommandRegistry.PRESET_MANAGER);
+                String presetDepsInput = value(presetFormState.textValue("deps"), "");
+                Element presetDepSuggestions = renderDepSuggestions(presetDepsInput, dependencyCatalog, theme);
 
                 List<String> activityLines = new ArrayList<>();
                 synchronized (activity) {
@@ -526,10 +575,9 @@ public final class UnifiedSpringRadTuiApp {
                         columns(
                                 presetForm.percent(62),
                                 column(
-                                        ThemeText.paint("Recent Activity", theme.titleAccent()),
-                                        text(""),
                                         renderCommandSuggestions(filteredCommands, theme),
-                                        text(""),
+                                        presetDepSuggestions,
+                                        ThemeText.paint("Recent Activity", theme.titleAccent()),
                                         list(activityLines)
                                                 .id("activity-list")
                                                 .scrollbar()
@@ -537,7 +585,7 @@ public final class UnifiedSpringRadTuiApp {
                                                 .rounded()
                                                 .borderColor(theme.panelBorder())
                                                 .displayOnly()
-                                ).percent(38)
+                                ).spacing(1).percent(38)
                         ).spacing(1),
                         store.state().status(),
                         "/help for commands, ENTER execute, ESC back",
@@ -578,6 +626,15 @@ public final class UnifiedSpringRadTuiApp {
                             appendActivity(activity, "Cannot save: preset name is required.");
                             store.dispatch(AppAction.setStatus("Save failed: missing preset name"));
                             return;
+                        }
+                        if (!dependencyCatalog.isEmpty()) {
+                            List<String> deps = parseCsv(submitted.textValue("deps"));
+                            List<String> invalid = findUnknownDeps(deps, dependencyCatalog, aliasRegistry);
+                            if (!invalid.isEmpty()) {
+                                appendActivity(activity, "Unknown dependencies: " + String.join(", ", invalid));
+                                store.dispatch(AppAction.setStatus("Save failed: unknown deps — " + String.join(", ", invalid)));
+                                return;
+                            }
                         }
                         Preset existing = presetRepository.findByName(name).orElse(null);
                         if (existing != null && existing.builtIn()) {
@@ -725,7 +782,8 @@ public final class UnifiedSpringRadTuiApp {
         }
     }
 
-    private static String validateProjectForm(FormState formState) {
+    private static String validateProjectForm(FormState formState, DependencyCatalog catalog,
+                                                  DependencyAliasRegistry aliasRegistry) {
         String name = formState.textValue("name");
         if (name == null || name.isBlank()) {
             return "Validation failed: Project name is required";
@@ -742,7 +800,103 @@ public final class UnifiedSpringRadTuiApp {
         if (output != null && !output.isBlank() && output.contains("..")) {
             return "Validation failed: Output directory must not contain '..'";
         }
+        if (!catalog.isEmpty()) {
+            List<String> deps = parseCsv(formState.textValue("dependencies"));
+            List<String> invalid = findUnknownDeps(deps, catalog, aliasRegistry);
+            if (!invalid.isEmpty()) {
+                return "Unknown dependencies: " + String.join(", ", invalid) + " — type to search the catalog";
+            }
+        }
         return null;
+    }
+
+    /**
+     * Returns dependency IDs that are neither valid Initializr IDs nor known aliases.
+     */
+    private static List<String> findUnknownDeps(List<String> deps, DependencyCatalog catalog,
+                                                 DependencyAliasRegistry aliasRegistry) {
+        List<String> unknown = new ArrayList<>();
+        for (String dep : deps) {
+            if (dep.isBlank()) continue;
+            if (catalog.isValid(dep)) continue;
+            // Check if the alias registry recognizes it (resolve returns the input unchanged for unknown aliases,
+            // but known aliases resolve to different IDs)
+            List<String> resolved = aliasRegistry.resolve(dep);
+            boolean isAlias = !(resolved.size() == 1 && resolved.get(0).equals(dep));
+            if (!isAlias) {
+                unknown.add(dep);
+            }
+        }
+        return unknown;
+    }
+
+    private static FormState buildProjectFormState(List<String> presetNames, List<String> javaVersions,
+                                                      List<String> bootVersions, String defaultName,
+                                                      String defaultArtifact, GlobalConfig.Defaults defaults) {
+        return FormState.builder()
+                .selectField("preset", presetNames, 0)
+                .textField("name", defaultName)
+                .textField("groupId", defaults.groupId() != null ? defaults.groupId() : "com.example")
+                .textField("artifactId", defaultArtifact)
+                .selectField("javaVersion", javaVersions, indexOfOrDefault(javaVersions, defaults.javaVersion(), 0))
+                .selectField("bootVersion", bootVersions, indexOfOrDefault(bootVersions, defaults.bootVersion(), 0))
+                .selectField("packaging", List.of("jar", "war"),
+                        defaults.packaging() != null ? indexOfOrDefault(List.of("jar", "war"), defaults.packaging().name(), 0) : 0)
+                .selectField("buildTool", List.of("gradle", "maven"),
+                        defaults.buildTool() != null ? indexOfOrDefault(List.of("gradle", "maven"), defaults.buildTool().name(), 0) : 0)
+                .selectField("authStyle", List.of("jwt", "session", "none"), 0)
+                .selectField("database", List.of("postgresql", "mysql", "h2"), 0)
+                .textField("dependencies", "")
+                .textField("scaffolds", "")
+                .textField("outputDirectory", "./" + defaultArtifact)
+                .build();
+    }
+
+    private static void applyPresetToForm(FormState form, Preset preset,
+                                            List<String> javaVersions, List<String> bootVersions) {
+        if (preset.groupId() != null) {
+            form.setTextValue("groupId", preset.groupId());
+        }
+        if (preset.javaVersion() != null) {
+            int idx = indexOfOrDefault(javaVersions, preset.javaVersion(), -1);
+            if (idx >= 0) form.selectIndex("javaVersion", idx);
+        }
+        if (preset.bootVersion() != null) {
+            int idx = indexOfOrDefault(bootVersions, preset.bootVersion(), -1);
+            if (idx >= 0) form.selectIndex("bootVersion", idx);
+        }
+        if (preset.packaging() != null) {
+            int idx = indexOfOrDefault(List.of("jar", "war"), preset.packaging().name(), -1);
+            if (idx >= 0) form.selectIndex("packaging", idx);
+        }
+        if (preset.buildTool() != null) {
+            int idx = indexOfOrDefault(List.of("gradle", "maven"), preset.buildTool().name(), -1);
+            if (idx >= 0) form.selectIndex("buildTool", idx);
+        }
+        if (preset.authStyle() != null) {
+            int idx = indexOfOrDefault(List.of("jwt", "session", "none"), preset.authStyle().name(), -1);
+            if (idx >= 0) form.selectIndex("authStyle", idx);
+        }
+        if (preset.database() != null) {
+            int idx = indexOfOrDefault(List.of("postgresql", "mysql", "h2"), preset.database().name(), -1);
+            if (idx >= 0) form.selectIndex("database", idx);
+        }
+        if (preset.dependencies() != null && !preset.dependencies().isEmpty()) {
+            form.setTextValue("dependencies", String.join(", ", preset.dependencies()));
+        }
+        if (preset.scaffolds() != null && !preset.scaffolds().isEmpty()) {
+            form.setTextValue("scaffolds", String.join(", ", preset.scaffolds()));
+        }
+    }
+
+    private static int indexOfOrDefault(List<String> options, String value, int fallback) {
+        if (value == null) return fallback;
+        int idx = options.indexOf(value);
+        if (idx >= 0) return idx;
+        for (int i = 0; i < options.size(); i++) {
+            if (options.get(i).equalsIgnoreCase(value)) return i;
+        }
+        return fallback;
     }
 
     private static CliArgs toCliArgs(FormState formState) {
@@ -758,6 +912,7 @@ public final class UnifiedSpringRadTuiApp {
         String databaseValue = defaultIfBlank(formState.selectValue("database"), "postgresql");
         String output = defaultIfBlank(formState.textValue("outputDirectory"), "./" + artifactId);
         List<String> dependencies = parseCsv(formState.textValue("dependencies"));
+        List<String> scaffolds = parseCsv(formState.textValue("scaffolds"));
 
         return new CliArgs(
                 name,
@@ -770,7 +925,7 @@ public final class UnifiedSpringRadTuiApp {
                 parseEnum(ProjectConfig.AuthStyle.class, authStyleValue, ProjectConfig.AuthStyle.jwt),
                 parseEnum(ProjectConfig.Database.class, databaseValue, ProjectConfig.Database.postgresql),
                 dependencies,
-                List.of(),
+                scaffolds,
                 Path.of(output),
                 null,
                 false
@@ -838,6 +993,50 @@ public final class UnifiedSpringRadTuiApp {
 
     private static List<CommandDoc> filterSlashCommands(String input, List<CommandDoc> commands) {
         return CommandAutocomplete.filter(input, commands);
+    }
+
+    private static Element renderDepSuggestions(String depsInput, DependencyCatalog catalog, UiTheme theme) {
+        if (catalog.isEmpty()) {
+            return text("");
+        }
+        // Extract the last token being typed (after the last comma)
+        String query = "";
+        if (!depsInput.isBlank()) {
+            String[] parts = depsInput.split(",", -1);
+            query = parts[parts.length - 1].trim();
+        }
+        if (query.isEmpty()) {
+            return panel(" DEPENDENCIES ",
+                    ThemeText.paint(catalog.size() + " dependencies available", theme.mutedText()),
+                    ThemeText.paint("Type to search the catalog", theme.mutedText())
+            ).rounded().borderColor(theme.panelBorder()).padding(1);
+        }
+        List<DependencyEntry> matches = catalog.search(query, 8);
+        if (matches.isEmpty()) {
+            return panel(" DEPENDENCIES ",
+                    ThemeText.paint("No matches for: " + query, theme.errorText())
+            ).rounded().borderColor(theme.panelBorder()).padding(1);
+        }
+        List<Element> items = new ArrayList<>();
+        for (DependencyEntry entry : matches) {
+            boolean valid = entry.id().equalsIgnoreCase(query);
+            items.add(ThemeText.paint(
+                    (valid ? "✓ " : "  ") + entry.id() + " — " + entry.name(),
+                    valid ? theme.successAccent() : theme.primaryText()));
+            if (!entry.description().isBlank()) {
+                items.add(ThemeText.paint("    " + truncate(entry.description(), 40), theme.mutedText()));
+            }
+        }
+        return panel(" DEPENDENCIES ",
+                column(items.toArray(new Element[0])).spacing(0)
+        ).rounded().borderColor(theme.panelBorder()).padding(1);
+    }
+
+    private static String truncate(String text, int maxLen) {
+        if (text.length() <= maxLen) {
+            return text;
+        }
+        return text.substring(0, maxLen - 1) + "…";
     }
 
     private static Element renderCommandSuggestions(List<CommandDoc> commands, UiTheme theme) {
