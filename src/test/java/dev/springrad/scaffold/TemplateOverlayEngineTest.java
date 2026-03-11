@@ -656,22 +656,32 @@ class TemplateOverlayEngineTest {
     }
 
     @Test
-    void overlayDirectory_copiesAllowedFilesOnly() throws Exception {
+    void overlayDirectory_skipsDeniedFiles() throws Exception {
         Path userDir = tempDir.resolve("user-project");
-        // allowed
+        // allowed — source, config, docker, misc files
         Files.createDirectories(userDir.resolve("src/main/java/com/example"));
         Files.writeString(userDir.resolve("src/main/java/com/example/App.java"), "user code");
+        Files.createDirectories(userDir.resolve("src/main/kotlin/com/example"));
+        Files.writeString(userDir.resolve("src/main/kotlin/com/example/App.kt"), "user kotlin");
         Files.writeString(userDir.resolve("Dockerfile"), "FROM openjdk:21");
         Files.writeString(userDir.resolve(".env"), "KEY=val");
         Files.writeString(userDir.resolve("docker-compose.yml"), "services:");
         Files.createDirectories(userDir.resolve("config"));
         Files.writeString(userDir.resolve("config/application.yml"), "spring: {}");
-        // not allowed
+        Files.writeString(userDir.resolve("README.md"), "# readme");
+        Files.createDirectories(userDir.resolve("data"));
+        Files.writeString(userDir.resolve("data/seed.sql"), "INSERT INTO t VALUES(1)");
+        // denied — build output, IDE, VCS, build scripts
         Files.writeString(userDir.resolve("build.gradle"), "plugins {}");
+        Files.writeString(userDir.resolve("build.gradle.kts"), "plugins {}");
         Files.writeString(userDir.resolve("pom.xml"), "<project/>");
         Files.writeString(userDir.resolve("settings.gradle"), "rootProject.name = 'x'");
+        Files.writeString(userDir.resolve("settings.gradle.kts"), "rootProject.name = \"x\"");
         Files.writeString(userDir.resolve("gradlew"), "#!/bin/sh");
-        Files.writeString(userDir.resolve("README.md"), "# readme");
+        Files.writeString(userDir.resolve("gradlew.bat"), "@echo off");
+        Files.writeString(userDir.resolve("mvnw"), "#!/bin/sh");
+        Files.writeString(userDir.resolve("mvnw.cmd"), "@echo off");
+        Files.writeString(userDir.resolve("HELP.md"), "# help");
         Files.createDirectories(userDir.resolve("build/classes"));
         Files.writeString(userDir.resolve("build/classes/App.class"), "bytecode");
         Files.createDirectories(userDir.resolve("target"));
@@ -680,6 +690,12 @@ class TemplateOverlayEngineTest {
         Files.writeString(userDir.resolve(".idea/workspace.xml"), "<xml/>");
         Files.createDirectories(userDir.resolve(".git"));
         Files.writeString(userDir.resolve(".git/HEAD"), "ref: refs/heads/main");
+        Files.createDirectories(userDir.resolve("gradle/wrapper"));
+        Files.writeString(userDir.resolve("gradle/wrapper/gradle-wrapper.properties"), "url");
+        Files.createDirectories(userDir.resolve(".gradle"));
+        Files.writeString(userDir.resolve(".gradle/cache.bin"), "cache");
+        Files.createDirectories(userDir.resolve("node_modules/foo"));
+        Files.writeString(userDir.resolve("node_modules/foo/index.js"), "module");
 
         TemplateOverlayEngine engine = new TemplateOverlayEngine(tempDir.resolve("empty-templates"));
         Path output = tempDir.resolve("out");
@@ -688,46 +704,60 @@ class TemplateOverlayEngineTest {
 
         // allowed files present
         assertTrue(Files.exists(output.resolve("src/main/java/com/example/App.java")));
+        assertTrue(Files.exists(output.resolve("src/main/kotlin/com/example/App.kt")));
         assertTrue(Files.exists(output.resolve("Dockerfile")));
         assertTrue(Files.exists(output.resolve(".env")));
         assertTrue(Files.exists(output.resolve("docker-compose.yml")));
+        assertTrue(Files.exists(output.resolve("README.md")));
+        assertTrue(Files.exists(output.resolve("data/seed.sql")));
         // config/application.yml gets remapped to src/main/resources/application.yml
         assertTrue(Files.exists(output.resolve("src/main/resources/application.yml")));
 
-        // disallowed files absent
+        // denied files absent
         assertFalse(Files.exists(output.resolve("build.gradle")));
+        assertFalse(Files.exists(output.resolve("build.gradle.kts")));
         assertFalse(Files.exists(output.resolve("pom.xml")));
         assertFalse(Files.exists(output.resolve("settings.gradle")));
+        assertFalse(Files.exists(output.resolve("settings.gradle.kts")));
         assertFalse(Files.exists(output.resolve("gradlew")));
-        assertFalse(Files.exists(output.resolve("README.md")));
+        assertFalse(Files.exists(output.resolve("gradlew.bat")));
+        assertFalse(Files.exists(output.resolve("mvnw")));
+        assertFalse(Files.exists(output.resolve("mvnw.cmd")));
+        assertFalse(Files.exists(output.resolve("HELP.md")));
         assertFalse(Files.exists(output.resolve("build/classes/App.class")));
         assertFalse(Files.exists(output.resolve("target/app.jar")));
         assertFalse(Files.exists(output.resolve(".idea/workspace.xml")));
         assertFalse(Files.exists(output.resolve(".git/HEAD")));
+        assertFalse(Files.exists(output.resolve("gradle/wrapper/gradle-wrapper.properties")));
+        assertFalse(Files.exists(output.resolve(".gradle/cache.bin")));
+        assertFalse(Files.exists(output.resolve("node_modules/foo/index.js")));
     }
 
     @Test
-    void overlayDirectory_warnsWhenNoAllowedFilesFound() throws Exception {
-        Path randomDir = tempDir.resolve("random-stuff");
-        Files.createDirectories(randomDir);
-        Files.writeString(randomDir.resolve("notes.txt"), "some notes");
-        Files.writeString(randomDir.resolve("todo.md"), "# TODO");
-        Files.createDirectories(randomDir.resolve("data"));
-        Files.writeString(randomDir.resolve("data/dump.csv"), "a,b,c");
+    void overlayDirectory_copiesRandomConfigDirectory() throws Exception {
+        Path configDir = tempDir.resolve("my-configs");
+        Files.createDirectories(configDir);
+        Files.writeString(configDir.resolve("nginx.conf"), "server {}");
+        Files.writeString(configDir.resolve("logback.xml"), "<configuration/>");
+        Files.createDirectories(configDir.resolve("k8s"));
+        Files.writeString(configDir.resolve("k8s/deployment.yml"), "apiVersion: apps/v1");
 
         TemplateOverlayEngine engine = new TemplateOverlayEngine(tempDir.resolve("empty-templates"));
         Path output = tempDir.resolve("out");
         Files.createDirectories(output);
-        java.util.List<String> messages = new java.util.ArrayList<>();
-        engine.overlayDirectory(randomDir, config(output), false, messages::add);
+        engine.overlayDirectory(configDir, config(output), false, msg -> {});
 
-        assertEquals(1, messages.size());
-        assertTrue(messages.get(0).contains("no recognized template files"));
+        assertTrue(Files.exists(output.resolve("nginx.conf")));
+        assertTrue(Files.exists(output.resolve("logback.xml")));
+        assertTrue(Files.exists(output.resolve("k8s/deployment.yml")));
     }
 
     @Test
-    void isAllowedUserFile_checksAllowlist() {
+    void isAllowedUserFile_denylist() {
+        // allowed — source files, config, docker, misc
         assertTrue(TemplateOverlayEngine.isAllowedUserFile("src/main/java/Foo.java"));
+        assertTrue(TemplateOverlayEngine.isAllowedUserFile("src/main/kotlin/Foo.kt"));
+        assertTrue(TemplateOverlayEngine.isAllowedUserFile("src/test/kotlin/FooTest.kt"));
         assertTrue(TemplateOverlayEngine.isAllowedUserFile("src/test/resources/test.yml"));
         assertTrue(TemplateOverlayEngine.isAllowedUserFile("config/application-dev.yml"));
         assertTrue(TemplateOverlayEngine.isAllowedUserFile("Dockerfile"));
@@ -735,16 +765,38 @@ class TemplateOverlayEngineTest {
         assertTrue(TemplateOverlayEngine.isAllowedUserFile("docker-compose.kafka.yml"));
         assertTrue(TemplateOverlayEngine.isAllowedUserFile(".env"));
         assertTrue(TemplateOverlayEngine.isAllowedUserFile(".env.example"));
+        assertTrue(TemplateOverlayEngine.isAllowedUserFile("README.md"));
+        assertTrue(TemplateOverlayEngine.isAllowedUserFile("data/seed.sql"));
+        assertTrue(TemplateOverlayEngine.isAllowedUserFile("k8s/deployment.yml"));
 
+        // denied — build scripts
         assertFalse(TemplateOverlayEngine.isAllowedUserFile("build.gradle"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("build.gradle.kts"));
         assertFalse(TemplateOverlayEngine.isAllowedUserFile("pom.xml"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("settings.gradle"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("settings.gradle.kts"));
         assertFalse(TemplateOverlayEngine.isAllowedUserFile("gradlew"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("gradlew.bat"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("mvnw"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("mvnw.cmd"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("HELP.md"));
+
+        // denied — build output and compiled artifacts
         assertFalse(TemplateOverlayEngine.isAllowedUserFile("build/classes/App.class"));
         assertFalse(TemplateOverlayEngine.isAllowedUserFile("target/app.jar"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("out/production/App.class"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("libs/dep.jar"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("app.war"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("project.iml"));
+
+        // denied — IDE, VCS, tooling
         assertFalse(TemplateOverlayEngine.isAllowedUserFile(".idea/workspace.xml"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile(".vscode/settings.json"));
         assertFalse(TemplateOverlayEngine.isAllowedUserFile(".git/HEAD"));
-        assertFalse(TemplateOverlayEngine.isAllowedUserFile("README.md"));
-        assertFalse(TemplateOverlayEngine.isAllowedUserFile("settings.gradle"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile(".gradle/cache.bin"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("gradle/wrapper/gradle-wrapper.properties"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile(".mvn/wrapper/maven-wrapper.properties"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("node_modules/foo/index.js"));
     }
 
     private static ProjectConfig config(Path output) {

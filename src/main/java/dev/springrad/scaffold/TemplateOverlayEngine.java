@@ -98,12 +98,6 @@ public final class TemplateOverlayEngine {
             return;
         }
 
-        if (!hasAllowedFiles(templateDirectory)) {
-            progress.accept("Warning: no recognized template files found in " + templateDirectory
-                    + " (expected src/, config/, Dockerfile, docker-compose*, or .env*)");
-            return;
-        }
-
         try {
             applyFromRoot(templateDirectory, config.outputDirectory(), config, force, true, Set.of(), progress);
         } catch (IOException e) {
@@ -214,39 +208,49 @@ public final class TemplateOverlayEngine {
     }
 
     /**
-     * Allowlist of top-level entries permitted when copying from a user template directory.
-     * Anything outside these prefixes is silently skipped so that pointing at an existing
-     * Spring Boot project doesn't copy build output, IDE files, or VCS metadata.
+     * Denied path prefixes and file names when copying from a user template directory.
+     * Build output, IDE metadata, VCS directories, build scripts, and wrappers are skipped.
      */
-    private static final List<String> ALLOWED_USER_PREFIXES = List.of(
-            "src/",
-            "config/",
-            "docker-compose",
-            "Dockerfile",
-            ".env"
+    private static final List<String> DENIED_PREFIXES = List.of(
+            "build/", "target/", "out/", "bin/",
+            ".git/", ".svn/", ".hg/",
+            ".idea/", ".vscode/", ".eclipse/",
+            ".gradle/", "gradle/", ".mvn/",
+            "node_modules/",
+            ".DS_Store"
     );
 
-    private static boolean hasAllowedFiles(Path directory) {
-        try (Stream<Path> stream = Files.walk(directory)) {
-            return stream.anyMatch(path -> {
-                if (Files.isDirectory(path)) {
-                    return false;
-                }
-                String relative = directory.relativize(path).toString().replace('\\', '/');
-                return !relative.isEmpty() && isAllowedUserFile(relative);
-            });
-        } catch (IOException e) {
-            return false;
-        }
-    }
+    private static final Set<String> DENIED_FILES = Set.of(
+            "build.gradle", "build.gradle.kts",
+            "settings.gradle", "settings.gradle.kts",
+            "pom.xml",
+            "gradlew", "gradlew.bat",
+            "mvnw", "mvnw.cmd",
+            "HELP.md"
+    );
+
+    private static final Set<String> DENIED_EXTENSIONS = Set.of(
+            ".class", ".jar", ".war", ".iml"
+    );
 
     static boolean isAllowedUserFile(String normalizedRelative) {
-        for (String prefix : ALLOWED_USER_PREFIXES) {
+        for (String prefix : DENIED_PREFIXES) {
             if (normalizedRelative.startsWith(prefix)) {
-                return true;
+                return false;
             }
         }
-        return false;
+        String fileName = normalizedRelative.contains("/")
+                ? normalizedRelative.substring(normalizedRelative.lastIndexOf('/') + 1)
+                : normalizedRelative;
+        if (DENIED_FILES.contains(fileName)) {
+            return false;
+        }
+        for (String ext : DENIED_EXTENSIONS) {
+            if (fileName.endsWith(ext)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean isBinary(byte[] bytes) {
