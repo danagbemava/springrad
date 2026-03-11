@@ -519,6 +519,8 @@ public final class UnifiedSpringRadTuiApp {
                 formRef[0] = presetForm;
                 String commandInput = value(presetFormState.textValue("command"), "");
                 List<CommandDoc> filteredCommands = filterSlashCommands(commandInput, CommandRegistry.PRESET_MANAGER);
+                String presetDepsInput = value(presetFormState.textValue("deps"), "");
+                Element presetDepSuggestions = renderDepSuggestions(presetDepsInput, dependencyCatalog, theme);
 
                 List<String> activityLines = new ArrayList<>();
                 synchronized (activity) {
@@ -534,10 +536,9 @@ public final class UnifiedSpringRadTuiApp {
                         columns(
                                 presetForm.percent(62),
                                 column(
-                                        ThemeText.paint("Recent Activity", theme.titleAccent()),
-                                        text(""),
                                         renderCommandSuggestions(filteredCommands, theme),
-                                        text(""),
+                                        presetDepSuggestions,
+                                        ThemeText.paint("Recent Activity", theme.titleAccent()),
                                         list(activityLines)
                                                 .id("activity-list")
                                                 .scrollbar()
@@ -545,7 +546,7 @@ public final class UnifiedSpringRadTuiApp {
                                                 .rounded()
                                                 .borderColor(theme.panelBorder())
                                                 .displayOnly()
-                                ).percent(38)
+                                ).spacing(1).percent(38)
                         ).spacing(1),
                         store.state().status(),
                         "/help for commands, ENTER execute, ESC back",
@@ -586,6 +587,15 @@ public final class UnifiedSpringRadTuiApp {
                             appendActivity(activity, "Cannot save: preset name is required.");
                             store.dispatch(AppAction.setStatus("Save failed: missing preset name"));
                             return;
+                        }
+                        if (!dependencyCatalog.isEmpty()) {
+                            List<String> deps = parseCsv(submitted.textValue("deps"));
+                            List<String> invalid = dependencyCatalog.findInvalid(deps);
+                            if (!invalid.isEmpty()) {
+                                appendActivity(activity, "Unknown dependencies: " + String.join(", ", invalid));
+                                store.dispatch(AppAction.setStatus("Save failed: unknown deps — " + String.join(", ", invalid)));
+                                return;
+                            }
                         }
                         Preset existing = presetRepository.findByName(name).orElse(null);
                         if (existing != null && existing.builtIn()) {
