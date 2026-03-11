@@ -21,9 +21,10 @@ class PresetSubcommandsTest {
         PresetRepository repository = new PresetRepository(tempDir.resolve("presets.json"));
 
         int saveCode = new CommandLine(new PresetSaveCommand(repository))
-                .execute("custom", "--deps", "web,security", "--auth", "jwt", "--database", "postgresql");
+                .execute("custom", "--deps", "web,security", "--auth", "jwt", "--database", "postgresql", "--template-dir", "~/templates");
         assertTrue(saveCode == 0);
         assertTrue(repository.findByName("custom").isPresent());
+        assertTrue(repository.findByName("custom").orElseThrow().templateDir().equals("~/templates"));
 
         int deleteCode = new CommandLine(new PresetDeleteCommand(repository)).execute("custom");
         assertTrue(deleteCode == 0);

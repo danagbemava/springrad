@@ -1,21 +1,30 @@
 package dev.springrad.preset;
 
 import dev.springrad.cli.CliArgs;
+import dev.springrad.core.GlobalConfig;
+import dev.springrad.core.GlobalConfigLoader;
 import dev.springrad.core.ProjectConfig;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 public final class PresetService {
     private final PresetRepository repository;
+    private final GlobalConfigLoader globalConfigLoader;
 
     public PresetService() {
-        this(new PresetRepository());
+        this(new PresetRepository(), new GlobalConfigLoader());
     }
 
     public PresetService(PresetRepository repository) {
+        this(repository, new GlobalConfigLoader());
+    }
+
+    public PresetService(PresetRepository repository, GlobalConfigLoader globalConfigLoader) {
         this.repository = repository;
+        this.globalConfigLoader = globalConfigLoader;
     }
 
     public void seedDefaults() {
@@ -35,7 +44,20 @@ public final class PresetService {
                 ? Preset.named("defaults")
                 : repository.findByName(presetName)
                 .orElseThrow(() -> new IllegalArgumentException("Preset not found: " + presetName));
-        return ProjectConfig.merge(preset, overrides);
+        return ProjectConfig.merge(preset, overrides, globalConfig());
+    }
+
+    public Optional<Preset> findByName(String presetName) {
+        seedDefaults();
+        return repository.findByName(presetName);
+    }
+
+    public GlobalConfig globalConfig() {
+        return globalConfigLoader.load();
+    }
+
+    public GlobalConfigLoader globalConfigLoader() {
+        return globalConfigLoader;
     }
 
     public List<String> listPresetNames() {
@@ -70,7 +92,8 @@ public final class PresetService {
                                 "RateLimitingFilter",
                                 "LogbackJsonConfig",
                                 "FlywayInitMigration"
-                        )
+                        ),
+                        null
                 ),
                 new Preset(
                         "event-driven",
@@ -95,7 +118,8 @@ public final class PresetService {
                                 "BaseProducer",
                                 "DeadLetterQueueConfig",
                                 "KafkaTopicConfig"
-                        )
+                        ),
+                        null
                 )
         );
     }

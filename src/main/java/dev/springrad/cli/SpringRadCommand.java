@@ -14,7 +14,7 @@ import java.util.Properties;
         name = "springrad",
         mixinStandardHelpOptions = true,
         description = "Spring Boot RAD CLI — generate production-ready projects fast.",
-        subcommands = {NewCommand.class, PresetCommand.class},
+        subcommands = {NewCommand.class, PresetCommand.class, ConfigCommand.class},
         versionProvider = SpringRadCommand.VersionProvider.class
 )
 public final class SpringRadCommand implements Runnable {

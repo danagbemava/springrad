@@ -20,14 +20,15 @@ public record ProjectConfig(
         List<String> scaffolds,
         Path outputDirectory
 ) {
-    private static final DependencyAliasRegistry DEPENDENCY_ALIAS_REGISTRY = new DependencyAliasRegistry();
-
     public enum Packaging {jar, war}
     public enum BuildTool {gradle, maven}
     public enum AuthStyle {jwt, session, none}
     public enum Database {postgresql, mysql, h2}
 
-    public static ProjectConfig merge(Preset preset, CliArgs args) {
+    public static ProjectConfig merge(Preset preset, CliArgs args, GlobalConfig globalConfig) {
+        GlobalConfig config = globalConfig == null ? GlobalConfig.empty() : globalConfig;
+        GlobalConfig.Defaults defaults = config.defaults();
+
         String name = firstNonBlank(args.name(), preset.name(), "springrad-app");
         String artifactId = firstNonBlank(args.artifactId(), name);
 
@@ -36,20 +37,26 @@ public record ProjectConfig(
             output = Path.of("./" + artifactId);
         }
 
+        DependencyAliasRegistry aliasRegistry = new DependencyAliasRegistry(config.aliases());
+
         return new ProjectConfig(
                 name,
-                firstNonBlank(args.groupId(), preset.groupId(), "com.example"),
+                firstNonBlank(args.groupId(), preset.groupId(), defaults.groupId(), "com.example"),
                 artifactId,
-                firstNonBlank(args.javaVersion(), preset.javaVersion(), "21"),
-                firstNonBlank(args.bootVersion(), preset.bootVersion(), "latest"),
-                firstNonNull(args.packaging(), preset.packaging(), Packaging.jar),
-                firstNonNull(args.buildTool(), preset.buildTool(), BuildTool.gradle),
+                firstNonBlank(args.javaVersion(), preset.javaVersion(), defaults.javaVersion(), "21"),
+                firstNonBlank(args.bootVersion(), preset.bootVersion(), defaults.bootVersion(), "latest"),
+                firstNonNull(args.packaging(), preset.packaging(), defaults.packaging(), Packaging.jar),
+                firstNonNull(args.buildTool(), preset.buildTool(), defaults.buildTool(), BuildTool.gradle),
                 firstNonNull(args.authStyle(), preset.authStyle(), AuthStyle.jwt),
                 firstNonNull(args.database(), preset.database(), Database.postgresql),
-                DEPENDENCY_ALIAS_REGISTRY.resolveAll(nonEmpty(args.dependencies(), preset.dependencies())),
+                aliasRegistry.resolveAll(nonEmpty(args.dependencies(), preset.dependencies())),
                 nonEmpty(args.scaffolds(), preset.scaffolds()),
                 output
         );
+    }
+
+    public static ProjectConfig merge(Preset preset, CliArgs args) {
+        return merge(preset, args, GlobalConfig.empty());
     }
 
     private static String firstNonBlank(String... values) {

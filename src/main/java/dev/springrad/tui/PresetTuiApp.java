@@ -9,11 +9,17 @@ import dev.springrad.tui.app.AppRoute;
 import dev.springrad.tui.app.AppShell;
 import dev.springrad.tui.app.AppState;
 import dev.springrad.tui.app.AppStore;
-import dev.tamboui.style.Color;
+import dev.springrad.tui.app.CommandAutocomplete;
+import dev.springrad.tui.app.CommandDoc;
+import dev.springrad.tui.app.ThemeText;
+import dev.springrad.tui.app.UiTheme;
+import dev.springrad.tui.app.UiStyles;
+import dev.tamboui.css.engine.StyleEngine;
 import dev.tamboui.toolkit.app.ToolkitApp;
 import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.toolkit.elements.FormElement;
 import dev.tamboui.toolkit.event.EventResult;
+import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.widgets.form.FieldType;
 import dev.tamboui.widgets.form.FormState;
@@ -21,13 +27,26 @@ import dev.tamboui.widgets.form.FormState;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static dev.tamboui.toolkit.Toolkit.column;
 import static dev.tamboui.toolkit.Toolkit.columns;
 import static dev.tamboui.toolkit.Toolkit.form;
+import static dev.tamboui.toolkit.Toolkit.list;
 import static dev.tamboui.toolkit.Toolkit.text;
 
 public final class PresetTuiApp {
+    private static final List<CommandDoc> COMMANDS = List.of(
+            new CommandDoc("/list", "List available presets"),
+            new CommandDoc("/save", "Save/update preset from form fields"),
+            new CommandDoc("/delete", "Delete preset by name"),
+            new CommandDoc("/quit", "Exit preset manager"),
+            new CommandDoc("/exit", "Alias for /quit"),
+            new CommandDoc("/theme ocean", "Switch theme to Ocean"),
+            new CommandDoc("/theme graphite", "Switch theme to Graphite"),
+            new CommandDoc("/theme neon", "Switch theme to Neon")
+    );
+
     private final PresetRepository repository;
     private final PresetService presetService;
     private final ActivityLogStore activityLogStore;
@@ -46,7 +65,7 @@ public final class PresetTuiApp {
         AppStore store = new AppStore(AppState.initial(AppRoute.preset_manager));
         presetService.seedDefaults();
         FormState formState = FormState.builder()
-                .selectField("action", List.of("list", "save", "delete", "quit"), 0)
+                .textField("command", "")
                 .textField("name", "")
                 .textField("deps", "")
                 .selectField("auth", List.of("jwt", "session", "none"), 0)
@@ -63,6 +82,8 @@ public final class PresetTuiApp {
             activity.add("Preset manager started.");
             activityLogStore.append("Preset manager started.");
         }
+        AtomicReference<UiTheme> themeRef = new AtomicReference<>(UiTheme.ocean);
+        StyleEngine styleEngine = UiStyles.createEngine();
         store.dispatch(AppAction.setStatus("Preset manager ready"));
         ToolkitApp app = new ToolkitApp() {
             @Override
@@ -71,10 +92,17 @@ public final class PresetTuiApp {
             }
 
             @Override
+            protected void onStart() {
+                runner().styleEngine(styleEngine);
+                UiStyles.activate(styleEngine, themeRef.get());
+            }
+
+            @Override
             protected Element render() {
+                UiTheme theme = themeRef.get();
                 final FormElement[] presetFormRef = new FormElement[1];
                 FormElement presetForm = form(formState)
-                        .field("action", "Action", FieldType.SELECT)
+                        .field("command", "Command")
                         .field("name", "Preset Name")
                         .field("deps", "Dependencies (CSV)")
                         .field("auth", "Auth", FieldType.SELECT)
@@ -87,11 +115,19 @@ public final class PresetTuiApp {
                         .labelWidth(22)
                         .fieldSpacing(1)
                         .rounded()
-                        .borderColor(Color.CYAN)
-                        .focusedBorderColor(Color.LIGHT_CYAN)
+                        .borderColor(theme.panelBorder())
+                        .focusedBorderColor(theme.panelAccentBorder())
                         .submitOnEnter(true)
                         .arrowNavigation(true)
                         .onKeyEvent(event -> {
+                            if (event.isKey(KeyCode.TAB) && !event.hasShift() && !event.hasCtrl() && !event.hasAlt()) {
+                                String completion = CommandAutocomplete.complete(formState.textValue("command"), COMMANDS);
+                                if (completion != null) {
+                                    formState.setTextValue("command", completion);
+                                    store.dispatch(AppAction.setStatus("Autocompleted: " + completion));
+                                    return EventResult.HANDLED;
+                                }
+                            }
                             if (event.isConfirm()) {
                                 presetFormRef[0].submit();
                                 return EventResult.HANDLED;
@@ -99,9 +135,16 @@ public final class PresetTuiApp {
                             return EventResult.UNHANDLED;
                         })
                         .onSubmit(submitted -> {
-                            String action = value(submitted.selectValue("action"), "list");
+                            String action = value(normalizeSlashCommand(submitted.textValue("command")), "/list");
+                            UiTheme requestedTheme = parseThemeCommand(action);
+                            if (requestedTheme != null) {
+                                themeRef.set(requestedTheme);
+                                UiStyles.activate(styleEngine, requestedTheme);
+                                store.dispatch(AppAction.setStatus("Theme switched to " + requestedTheme.label()));
+                                return;
+                            }
                             switch (action) {
-                                case "list" -> {
+                                case "/list", "list" -> {
                                     List<Preset> presets = repository.findAll();
                                     if (presets.isEmpty()) {
                                         activity.add("No presets found.");
@@ -124,7 +167,7 @@ public final class PresetTuiApp {
                                         }
                                     }
                                 }
-                                case "save" -> {
+                                case "/save", "save" -> {
                                     String name = submitted.textValue("name");
                                     if (name == null || name.isBlank()) {
                                         activity.add("Cannot save: preset name is required.");
@@ -150,14 +193,15 @@ public final class PresetTuiApp {
                                             parseEnum(ProjectConfig.AuthStyle.class, submitted.selectValue("auth"), ProjectConfig.AuthStyle.jwt),
                                             parseEnum(ProjectConfig.Database.class, submitted.selectValue("database"), ProjectConfig.Database.postgresql),
                                             parseCsv(submitted.textValue("deps")),
-                                            List.of()
+                                            List.of(),
+                                            null
                                     );
                                     repository.save(preset);
                                     activity.add("Saved preset: " + preset.name());
                                     activityLogStore.append("Saved preset: " + preset.name());
                                     store.dispatch(AppAction.setStatus("Saved preset: " + preset.name()));
                                 }
-                                case "delete" -> {
+                                case "/delete", "delete" -> {
                                     String name = submitted.textValue("name");
                                     if (name == null || name.isBlank()) {
                                         activity.add("Cannot delete: preset name is required.");
@@ -175,7 +219,7 @@ public final class PresetTuiApp {
                                         store.dispatch(AppAction.setStatus("Delete failed: not found or built-in"));
                                     }
                                 }
-                                case "quit" -> {
+                                case "/quit", "/exit", "quit" -> {
                                     activityLogStore.append("Preset manager exited by user.");
                                     store.dispatch(AppAction.setStatus("Exiting preset manager"));
                                     quit();
@@ -186,16 +230,14 @@ public final class PresetTuiApp {
                                     store.dispatch(AppAction.setStatus("Unknown action"));
                                 }
                             }
-                        });
+                        })
+                        .id("command-form");
                 presetFormRef[0] = presetForm;
+                List<CommandDoc> commandMatches = filterSlashCommands(formState.textValue("command"));
 
-                int from = Math.max(0, activity.size() - 12);
-                List<Element> logLines = new ArrayList<>();
-                for (int i = from; i < activity.size(); i++) {
-                    logLines.add(text(activity.get(i)));
-                }
-                if (logLines.isEmpty()) {
-                    logLines.add(text("No activity yet. Choose an action and press ENTER.").gray());
+                List<String> activityLines = new ArrayList<>(activity);
+                if (activityLines.isEmpty()) {
+                    activityLines.add("No activity yet. Choose an action and press ENTER.");
                 }
 
                 return AppShell.render(
@@ -204,12 +246,20 @@ public final class PresetTuiApp {
                         columns(
                                 presetForm.percent(65),
                                 column(
-                                        text("Activity").bold().magenta(),
-                                        column(logLines.toArray(new Element[0])).spacing(0)
+                                        ThemeText.paint("Activity", theme.titleAccent()),
+                                        renderCommandSuggestions(commandMatches, theme),
+                                        text(""),
+                                        list(activityLines)
+                                                .id("activity-list")
+                                                .scrollbar()
+                                                .rounded()
+                                                .borderColor(theme.panelBorder())
+                                                .displayOnly()
                                 ).percent(35)
                         ).spacing(1),
                         store.state().status(),
-                        "Keys: TAB/Shift+TAB to navigate, arrows for selects, ENTER to execute action"
+                        "Commands: /list /save /delete /quit /exit /theme <name>",
+                        theme
                 );
             }
         };
@@ -226,6 +276,45 @@ public final class PresetTuiApp {
             return fallback;
         }
         return raw.trim();
+    }
+
+    private static String normalizeSlashCommand(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return raw.trim().toLowerCase();
+    }
+
+    private static List<CommandDoc> filterSlashCommands(String raw) {
+        return CommandAutocomplete.filter(raw, COMMANDS);
+    }
+
+    private static UiTheme parseThemeCommand(String normalized) {
+        if (normalized == null || !normalized.startsWith("/theme")) {
+            return null;
+        }
+        String[] parts = normalized.split("\\s+", 2);
+        if (parts.length < 2 || parts[1].isBlank()) {
+            return null;
+        }
+        String candidate = parts[1].trim();
+        if (!UiTheme.valuesList().contains(candidate)) {
+            return null;
+        }
+        return UiTheme.fromValue(candidate);
+    }
+
+    private static Element renderCommandSuggestions(List<CommandDoc> commands, UiTheme theme) {
+        if (commands.isEmpty()) {
+            return ThemeText.paint("Type / to show command suggestions.", theme.mutedText()).id("command-suggestions");
+        }
+        List<Element> rows = new ArrayList<>();
+        rows.add(ThemeText.paint("Commands", theme.titleAccent()));
+        for (CommandDoc command : commands) {
+            rows.add(ThemeText.paint("• " + command.command(), theme.successAccent()));
+            rows.add(ThemeText.paint("  " + command.description(), theme.mutedText()));
+        }
+        return column(rows.toArray(new Element[0])).id("command-suggestions").spacing(0);
     }
 
     private static String blankToNull(String raw) {

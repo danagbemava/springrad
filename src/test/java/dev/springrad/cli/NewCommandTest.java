@@ -1,9 +1,11 @@
 package dev.springrad.cli;
 
 import dev.springrad.core.GenerationResult;
+import dev.springrad.core.GlobalConfigLoader;
 import dev.springrad.core.ProjectConfig;
 import dev.springrad.core.ProjectGenerator;
 import dev.springrad.core.SpringRadException;
+import dev.springrad.preset.Preset;
 import dev.springrad.preset.PresetRepository;
 import dev.springrad.preset.PresetService;
 import dev.springrad.scaffold.TemplateOverlayEngine;
@@ -26,9 +28,10 @@ class NewCommandTest {
     Path tempDir;
 
     private NewCommand newCommand() {
-        PresetRepository repository = new PresetRepository(tempDir.resolve("presets.json"));
+        PresetRepository repository = new PresetRepository(tempDir.resolve("config").resolve("presets.json"));
+        PresetService presetService = new PresetService(repository, new GlobalConfigLoader(tempDir.resolve("config")));
         ProjectGenerator generator = config -> new GenerationResult(config.outputDirectory(), List.of());
-        return new NewCommand(new PresetService(repository), generator);
+        return new NewCommand(presetService, generator);
     }
 
     @Test
@@ -88,11 +91,11 @@ class NewCommandTest {
 
     @Test
     void verbosePrintsStackTraceOnSpringRadException() {
-        PresetRepository repository = new PresetRepository(tempDir.resolve("presets.json"));
+        PresetRepository repository = new PresetRepository(tempDir.resolve("config").resolve("presets.json"));
         ProjectGenerator generator = config -> {
             throw new SpringRadException("boom", "friendly boom");
         };
-        NewCommand command = new NewCommand(new PresetService(repository), generator);
+        NewCommand command = new NewCommand(new PresetService(repository, new GlobalConfigLoader(tempDir.resolve("config"))), generator);
         CommandLine commandLine = new CommandLine(command);
         ByteArrayOutputStream err = new ByteArrayOutputStream();
         commandLine.setErr(new java.io.PrintWriter(err, true));
@@ -107,8 +110,8 @@ class NewCommandTest {
 
     @Test
     void interactiveModeUsesSelectionFromTui() {
-        PresetRepository repository = new PresetRepository(tempDir.resolve("presets.json"));
-        PresetService presetService = new PresetService(repository);
+        PresetRepository repository = new PresetRepository(tempDir.resolve("config").resolve("presets.json"));
+        PresetService presetService = new PresetService(repository, new GlobalConfigLoader(tempDir.resolve("config")));
         AtomicReference<ProjectConfig> captured = new AtomicReference<>();
         ProjectGenerator generator = config -> {
             captured.set(config);
@@ -129,7 +132,9 @@ class NewCommandTest {
                         ProjectConfig.Database.mysql,
                         List.of("web"),
                         List.of(),
-                        tempDir.resolve("generated")
+                        tempDir.resolve("generated"),
+                        null,
+                        false
                 );
                 return new InteractiveSelection("web-api", args);
             }
@@ -154,5 +159,116 @@ class NewCommandTest {
         assertEquals(0, exitCode);
         assertEquals("interactive-app", captured.get().artifactId());
         assertEquals(ProjectConfig.AuthStyle.session, captured.get().authStyle());
+    }
+
+    @Test
+    void oneOffTemplateDirOverridesGlobalAndPresetTemplateDirs() throws Exception {
+        Path configDir = tempDir.resolve("config");
+        Path globalDir = tempDir.resolve("global-templates");
+        Path presetDir = tempDir.resolve("preset-templates");
+        Path cliDir = tempDir.resolve("cli-templates");
+        Path output = tempDir.resolve("out");
+
+        writeTemplate(globalDir, "global");
+        writeTemplate(presetDir, "preset");
+        writeTemplate(cliDir, "cli");
+        java.nio.file.Files.createDirectories(configDir);
+        java.nio.file.Files.writeString(configDir.resolve("config.yml"), "templateDir: " + globalDir.toString() + "\n");
+
+        PresetRepository repository = new PresetRepository(configDir.resolve("presets.json"));
+        repository.save(new Preset(
+                "custom",
+                false,
+                "com.example",
+                "21",
+                null,
+                ProjectConfig.Packaging.jar,
+                ProjectConfig.BuildTool.gradle,
+                ProjectConfig.AuthStyle.jwt,
+                ProjectConfig.Database.postgresql,
+                List.of("web"),
+                List.of(),
+                presetDir.toString()
+        ));
+        PresetService presetService = new PresetService(repository, new GlobalConfigLoader(configDir));
+
+        ProjectGenerator generator = config -> {
+            try {
+                java.nio.file.Files.createDirectories(config.outputDirectory());
+            } catch (java.io.IOException e) {
+                throw new RuntimeException(e);
+            }
+            return new GenerationResult(config.outputDirectory(), List.of());
+        };
+        NewCommand command = new NewCommand(presetService, generator);
+        CommandLine commandLine = new CommandLine(command);
+
+        int exitCode = commandLine.execute("demo-app", "--preset", "custom", "--output", output.toString(), "--template-dir", cliDir.toString());
+
+        assertEquals(0, exitCode);
+        assertEquals("cli", java.nio.file.Files.readString(output.resolve("src/main/resources/application.yml")).trim());
+    }
+
+    @Test
+    void noUserTemplatesSkipsAllUserTemplateLayers() throws Exception {
+        Path configDir = tempDir.resolve("config");
+        Path globalDir = tempDir.resolve("global-templates");
+        Path presetDir = tempDir.resolve("preset-templates");
+        Path cliDir = tempDir.resolve("cli-templates");
+        Path output = tempDir.resolve("out-no-user");
+
+        writeTemplate(globalDir, "global");
+        writeTemplate(presetDir, "preset");
+        writeTemplate(cliDir, "cli");
+        java.nio.file.Files.createDirectories(configDir);
+        java.nio.file.Files.writeString(configDir.resolve("config.yml"), "templateDir: " + globalDir.toString() + "\n");
+
+        PresetRepository repository = new PresetRepository(configDir.resolve("presets.json"));
+        repository.save(new Preset(
+                "custom",
+                false,
+                "com.example",
+                "21",
+                null,
+                ProjectConfig.Packaging.jar,
+                ProjectConfig.BuildTool.gradle,
+                ProjectConfig.AuthStyle.jwt,
+                ProjectConfig.Database.postgresql,
+                List.of("web"),
+                List.of(),
+                presetDir.toString()
+        ));
+        PresetService presetService = new PresetService(repository, new GlobalConfigLoader(configDir));
+        ProjectGenerator generator = config -> {
+            try {
+                java.nio.file.Files.createDirectories(config.outputDirectory());
+            } catch (java.io.IOException e) {
+                throw new RuntimeException(e);
+            }
+            return new GenerationResult(config.outputDirectory(), List.of());
+        };
+
+        NewCommand command = new NewCommand(presetService, generator);
+        CommandLine commandLine = new CommandLine(command);
+
+        int exitCode = commandLine.execute(
+                "demo-app",
+                "--preset", "custom",
+                "--output", output.toString(),
+                "--template-dir", cliDir.toString(),
+                "--no-user-templates"
+        );
+
+        assertEquals(0, exitCode);
+        String content = java.nio.file.Files.readString(output.resolve("src/main/resources/application.yml"));
+        assertTrue(!content.trim().equals("global"));
+        assertTrue(!content.trim().equals("preset"));
+        assertTrue(!content.trim().equals("cli"));
+    }
+
+    private void writeTemplate(Path root, String value) throws Exception {
+        Path configDir = root.resolve("config");
+        java.nio.file.Files.createDirectories(configDir);
+        java.nio.file.Files.writeString(configDir.resolve("application.yml"), value + "\n");
     }
 }

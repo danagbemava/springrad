@@ -7,7 +7,8 @@ import dev.springrad.tui.app.AppRoute;
 import dev.springrad.tui.app.AppShell;
 import dev.springrad.tui.app.AppState;
 import dev.springrad.tui.app.AppStore;
-import dev.tamboui.style.Color;
+import dev.springrad.tui.app.ThemeText;
+import dev.springrad.tui.app.UiTheme;
 import dev.tamboui.toolkit.event.EventResult;
 import dev.tamboui.toolkit.app.ToolkitApp;
 import dev.tamboui.toolkit.element.Element;
@@ -80,6 +81,7 @@ public class SpringRadTuiApp {
 
     private static final class TamboUiBackend implements Backend {
         private final ActivityLogStore activityLogStore = new ActivityLogStore();
+        private final AtomicReference<UiTheme> themeRef = new AtomicReference<>(UiTheme.ocean);
 
         @Override
         public InteractiveSelection start(String initialName, List<String> availablePresets) {
@@ -91,6 +93,7 @@ public class SpringRadTuiApp {
             String defaultName = defaultIfBlank(initialName, "springrad-app");
             String defaultArtifactId = slugify(defaultName);
             FormState formState = FormState.builder()
+                    .selectField("theme", UiTheme.valuesList(), 0)
                     .selectField("preset", availablePresets, 0)
                     .textField("name", defaultName)
                     .textField("groupId", "com.example")
@@ -114,8 +117,11 @@ public class SpringRadTuiApp {
 
                 @Override
                 protected dev.tamboui.toolkit.element.Element render() {
+                    UiTheme theme = UiTheme.fromValue(formState.selectValue("theme"));
+                    themeRef.set(theme);
                     final FormElement[] interactiveFormRef = new FormElement[1];
                     FormElement interactiveForm = form(formState)
+                            .field("theme", "Theme", FieldType.SELECT)
                             .field("preset", "Preset", FieldType.SELECT)
                             .field("name", "Project name")
                             .field("groupId", "Group ID")
@@ -131,8 +137,8 @@ public class SpringRadTuiApp {
                             .labelWidth(22)
                             .fieldSpacing(1)
                             .rounded()
-                            .borderColor(Color.CYAN)
-                            .focusedBorderColor(Color.LIGHT_CYAN)
+                            .borderColor(theme.panelBorder())
+                            .focusedBorderColor(theme.panelAccentBorder())
                             .submitOnEnter(true)
                             .arrowNavigation(true)
                             .onKeyEvent(event -> {
@@ -143,6 +149,7 @@ public class SpringRadTuiApp {
                                 return EventResult.UNHANDLED;
                             })
                             .onSubmit(submitted -> {
+                                themeRef.set(UiTheme.fromValue(submitted.selectValue("theme")));
                                 selectionRef.set(toSelection(submitted, availablePresets));
                                 store.dispatch(AppAction.setStatus("Project configuration submitted"));
                                 quit();
@@ -155,22 +162,24 @@ public class SpringRadTuiApp {
                             columns(
                                     interactiveForm.percent(68),
                                     column(
-                                            text("Preview").bold().magenta(),
-                                            text("Preset:       " + value(formState.selectValue("preset"), "web-api")).yellow(),
-                                            text("Name:         " + value(formState.textValue("name"), "springrad-app")).white(),
-                                            text("Group:        " + value(formState.textValue("groupId"), "com.example")),
-                                            text("Artifact:     " + value(formState.textValue("artifactId"), "springrad-app")).green(),
-                                            text("Java:         " + value(formState.textValue("javaVersion"), "21")),
-                                            text("Boot:         " + value(formState.textValue("bootVersion"), "latest")),
-                                            text("Build:        " + value(formState.selectValue("buildTool"), "gradle")),
-                                            text("Auth:         " + value(formState.selectValue("authStyle"), "jwt")),
-                                            text("Database:     " + value(formState.selectValue("database"), "postgresql")),
-                                            text("Dependencies: " + value(formState.textValue("dependencies"), "(preset defaults)")),
-                                            text("Output:       " + value(formState.textValue("outputDirectory"), "./springrad-app")).cyan()
+                                            ThemeText.paint("Configuration Preview", theme.titleAccent()),
+                                            text(""),
+                                            ThemeText.paint(previewLine("Preset", value(formState.selectValue("preset"), "web-api")), theme.statusAccent()),
+                                            ThemeText.paint(previewLine("Name", value(formState.textValue("name"), "springrad-app")), theme.primaryText()),
+                                            text(previewLine("Group", value(formState.textValue("groupId"), "com.example"))),
+                                            ThemeText.paint(previewLine("Artifact", value(formState.textValue("artifactId"), "springrad-app")), theme.successAccent()),
+                                            text(previewLine("Java", value(formState.textValue("javaVersion"), "21"))),
+                                            text(previewLine("Boot", value(formState.textValue("bootVersion"), "latest"))),
+                                            text(previewLine("Build", value(formState.selectValue("buildTool"), "gradle"))),
+                                            text(previewLine("Auth", value(formState.selectValue("authStyle"), "jwt"))),
+                                            text(previewLine("Database", value(formState.selectValue("database"), "postgresql"))),
+                                            text(previewLine("Dependencies", value(formState.textValue("dependencies"), "(preset defaults)"))),
+                                            ThemeText.paint(previewLine("Output", value(formState.textValue("outputDirectory"), "./springrad-app")), theme.panelBorder())
                                     ).percent(32)
                             ).spacing(1),
                             store.state().status(),
-                            "Keys: TAB/Shift+TAB to navigate, arrows for selects, ENTER to generate"
+                            "Keys: TAB/Shift+TAB to navigate, arrows for selects, ENTER to generate",
+                            theme
                     );
                 }
             };
@@ -271,16 +280,17 @@ public class SpringRadTuiApp {
                             title,
                             "Execution updates stream in real time",
                             column(
-                                    text("Step: " + (total == 0 ? "-" : (step + "/" + total))).yellow(),
-                                    text(stepText).white(),
-                                    text("Status: " + statusText.get()).green(),
-                                    text(awaitingConfirmation.get() ? "Confirm exit: press ENTER" : "Please wait...").gray(),
+                                    ThemeText.paint("Step: " + (total == 0 ? "-" : (step + "/" + total)), themeRef.get().statusAccent()),
+                                    ThemeText.paint(stepText, themeRef.get().primaryText()),
+                                    ThemeText.paint("Status: " + statusText.get(), themeRef.get().successAccent()),
+                                    ThemeText.paint(awaitingConfirmation.get() ? "Confirm exit: press ENTER" : "Please wait...", themeRef.get().mutedText()),
                                     text(""),
-                                    text("Activity log").magenta(),
+                                    ThemeText.paint("Execution Log", themeRef.get().titleAccent()),
                                     column(logItems.toArray(new Element[0])).spacing(0)
                             ).spacing(0),
                             store.state().status(),
-                            "Sub-steps include file writes and initialization actions"
+                            "Sub-steps include file writes and initialization actions",
+                            themeRef.get()
                     )
                             .spacing(1)
                             .focusable(true)
@@ -339,7 +349,9 @@ public class SpringRadTuiApp {
                     parseEnum(ProjectConfig.Database.class, databaseValue, ProjectConfig.Database.postgresql),
                     dependencies,
                     List.of(),
-                    Path.of(output)
+                    Path.of(output),
+                    null,
+                    false
             );
             return new InteractiveSelection(presetName, cliArgs);
         }
@@ -428,7 +440,9 @@ public class SpringRadTuiApp {
                     database,
                     extraDependencies,
                     List.of(),
-                    output
+                    output,
+                    null,
+                    false
             );
             return new InteractiveSelection(presetName, cliArgs);
         }
@@ -532,6 +546,10 @@ public class SpringRadTuiApp {
         String normalized = value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-");
         String trimmed = normalized.replaceAll("^-+", "").replaceAll("-+$", "");
         return trimmed.isBlank() ? "springrad-app" : trimmed;
+    }
+
+    private static String previewLine(String label, String value) {
+        return String.format("%-13s %s", label + ":", value);
     }
 
     private static <E extends Enum<E>> E parseEnum(Class<E> enumType, String rawValue, E fallback) {

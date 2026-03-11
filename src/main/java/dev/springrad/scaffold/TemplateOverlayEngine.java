@@ -47,6 +47,27 @@ public final class TemplateOverlayEngine {
         }
     }
 
+    public void overlayDirectory(Path templateDirectory, ProjectConfig config, boolean force, Consumer<String> progress) {
+        Objects.requireNonNull(templateDirectory, "templateDirectory");
+        Objects.requireNonNull(config, "config");
+        Objects.requireNonNull(progress, "progress");
+
+        if (!Files.exists(templateDirectory)) {
+            progress.accept("Warning: template directory does not exist, skipping: " + templateDirectory);
+            return;
+        }
+        if (!Files.isDirectory(templateDirectory)) {
+            progress.accept("Warning: template path is not a directory, skipping: " + templateDirectory);
+            return;
+        }
+
+        try {
+            applyFromRoot(templateDirectory, config.outputDirectory(), config, force, progress);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to overlay templates from " + templateDirectory, e);
+        }
+    }
+
     private void applyFromRoot(
             Path root,
             Path targetRoot,

@@ -13,7 +13,19 @@ public final class DependencyAliasRegistry {
     private final Map<String, List<String>> aliases;
 
     public DependencyAliasRegistry() {
+        this(Map.of());
+    }
+
+    public DependencyAliasRegistry(Map<String, List<String>> customAliases) {
         this.aliases = defaultAliases();
+        if (customAliases != null && !customAliases.isEmpty()) {
+            customAliases.forEach((key, value) -> {
+                if (key == null || key.isBlank() || value == null || value.isEmpty()) {
+                    return;
+                }
+                aliases.put(key, List.copyOf(value));
+            });
+        }
     }
 
     public List<String> resolve(String dependency) {

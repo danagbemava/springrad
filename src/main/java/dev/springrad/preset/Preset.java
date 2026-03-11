@@ -15,8 +15,38 @@ public record Preset(
         ProjectConfig.AuthStyle authStyle,
         ProjectConfig.Database database,
         List<String> dependencies,
-        List<String> scaffolds
+        List<String> scaffolds,
+        String templateDir
 ) {
+    public Preset(
+            String name,
+            boolean builtIn,
+            String groupId,
+            String javaVersion,
+            String bootVersion,
+            ProjectConfig.Packaging packaging,
+            ProjectConfig.BuildTool buildTool,
+            ProjectConfig.AuthStyle authStyle,
+            ProjectConfig.Database database,
+            List<String> dependencies,
+            List<String> scaffolds
+    ) {
+        this(
+                name,
+                builtIn,
+                groupId,
+                javaVersion,
+                bootVersion,
+                packaging,
+                buildTool,
+                authStyle,
+                database,
+                dependencies,
+                scaffolds,
+                null
+        );
+    }
+
     public static Preset named(String name) {
         return new Preset(
                 name,
@@ -29,7 +59,8 @@ public record Preset(
                 null,
                 null,
                 List.of(),
-                List.of()
+                List.of(),
+                null
         );
     }
 }

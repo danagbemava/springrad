@@ -2,6 +2,7 @@ package dev.springrad.preset;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.springrad.core.SpringRadPaths;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -32,7 +33,7 @@ public final class PresetRepository {
         if (override != null && !override.isBlank()) {
             return Path.of(override);
         }
-        return Path.of(System.getProperty("user.home"), ".springrad", "presets.json");
+        return SpringRadPaths.configDirectory().resolve("presets.json");
     }
 
     public List<Preset> findAll() {

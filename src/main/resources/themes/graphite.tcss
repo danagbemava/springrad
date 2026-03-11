@@ -1,0 +1,27 @@
+$accent: gray;
+$accent2: white;
+$border: gray;
+$muted: dark-gray;
+
+.app-shell { spacing: 1; }
+
+#root-panel {
+    padding: 1;
+    border-type: rounded;
+    border-color: $accent;
+}
+
+#root-panel:focus {
+    border-color: $accent2;
+}
+
+#brand-block { margin: 0; }
+#command-form { margin: 0; }
+#command-suggestions { margin: 0; }
+
+#activity-list {
+    border-type: rounded;
+    border-color: $border;
+}
+
+#progress-gauge { color: green; }

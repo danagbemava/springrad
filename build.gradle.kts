@@ -24,14 +24,15 @@ dependencies {
 
     implementation("org.apache.maven:maven-model:3.9.11")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
+    implementation("org.yaml:snakeyaml:2.3")
 
     // TamboUI dependencies
     implementation(platform("dev.tamboui:tamboui-bom:$tambouiVersion"))
     implementation("dev.tamboui:tamboui-toolkit")
     implementation("dev.tamboui:tamboui-panama-backend")
+    annotationProcessor("dev.tamboui:tamboui-processor:$tambouiVersion")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
-    testImplementation("org.yaml:snakeyaml:2.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

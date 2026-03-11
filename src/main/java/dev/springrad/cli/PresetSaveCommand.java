@@ -4,10 +4,10 @@ import dev.springrad.core.ProjectConfig;
 import dev.springrad.preset.Preset;
 import dev.springrad.preset.PresetRepository;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
-import picocli.CommandLine.Model.CommandSpec;
 
 import java.util.List;
 
@@ -45,6 +45,9 @@ public final class PresetSaveCommand implements Runnable {
     @Option(names = "--packaging", defaultValue = "jar")
     ProjectConfig.Packaging packaging;
 
+    @Option(names = "--template-dir", description = "Preset-specific template directory")
+    String templateDir;
+
     public PresetSaveCommand() {
         this(new PresetRepository());
     }
@@ -72,7 +75,8 @@ public final class PresetSaveCommand implements Runnable {
                 auth,
                 database,
                 dependencies == null ? List.of() : dependencies,
-                List.of()
+                List.of(),
+                templateDir
         );
         repository.save(preset);
         spec.commandLine().getOut().printf("Saved preset '%s'.%n", name);
