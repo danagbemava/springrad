@@ -9,6 +9,7 @@ import dev.springrad.preset.Preset;
 import dev.springrad.preset.PresetRepository;
 import dev.springrad.preset.PresetService;
 import dev.springrad.scaffold.TemplateOverlayEngine;
+import dev.springrad.core.DependencyAliasRegistry;
 import dev.springrad.core.DependencyCatalog;
 import dev.springrad.core.DependencyEntry;
 import dev.springrad.core.InitializrMetadataClient;
@@ -105,6 +106,7 @@ public final class UnifiedSpringRadTuiApp {
         List<String> javaVersions = metadataClient.fetchJavaVersions();
         List<String> bootVersions = metadataClient.fetchBootVersions();
         DependencyCatalog dependencyCatalog = metadataClient.fetchDependencyCatalog();
+        DependencyAliasRegistry aliasRegistry = new DependencyAliasRegistry();
 
         AppStore store = new AppStore(AppState.initial(AppRoute.command_center));
         store.dispatch(AppAction.setStatus("Ready"));
@@ -133,20 +135,8 @@ public final class UnifiedSpringRadTuiApp {
 
         String defaultName = "springrad-app";
         String defaultArtifact = slugify(defaultName);
-        FormState projectFormState = FormState.builder()
-                .selectField("preset", presetNames, 0)
-                .textField("name", defaultName)
-                .textField("groupId", "com.example")
-                .textField("artifactId", defaultArtifact)
-                .selectField("javaVersion", javaVersions, 0)
-                .selectField("bootVersion", bootVersions, 0)
-                .selectField("packaging", List.of("jar", "war"), 0)
-                .selectField("buildTool", List.of("gradle", "maven"), 0)
-                .selectField("authStyle", List.of("jwt", "session", "none"), 0)
-                .selectField("database", List.of("postgresql", "mysql", "h2"), 0)
-                .textField("dependencies", "")
-                .textField("outputDirectory", "./" + defaultArtifact)
-                .build();
+        AtomicReference<FormState> projectFormRef = new AtomicReference<>(
+                buildProjectFormState(presetNames, javaVersions, bootVersions, defaultName, defaultArtifact));
 
         FormState presetFormState = FormState.builder()
                 .textField("command", "")
@@ -246,6 +236,9 @@ public final class UnifiedSpringRadTuiApp {
                             switch (action) {
                                 case "/generate", "generate_project" -> {
                                     quitArmed.set(false);
+                                    List<String> freshPresets = presetService.listPresetNames();
+                                    projectFormRef.set(buildProjectFormState(
+                                            freshPresets, javaVersions, bootVersions, defaultName, defaultArtifact));
                                     routeRef.set(AppRoute.project_wizard);
                                     store.dispatch(AppAction.navigate(AppRoute.project_wizard));
                                     store.dispatch(AppAction.setStatus("Project wizard"));
@@ -316,6 +309,7 @@ public final class UnifiedSpringRadTuiApp {
             private Element renderProjectWizard(int terminalRows) {
                 UiTheme theme = themeRef.get();
                 boolean compact = terminalRows < 40;
+                FormState projectFormState = projectFormRef.get();
                 final FormElement[] formRef = new FormElement[1];
                 FormElement projectForm = form(projectFormState)
                         .field("preset", "Preset", FieldType.SELECT)
@@ -398,7 +392,7 @@ public final class UnifiedSpringRadTuiApp {
                     return;
                 }
 
-                String validationError = validateProjectForm(submitted, dependencyCatalog);
+                String validationError = validateProjectForm(submitted, dependencyCatalog, aliasRegistry);
                 if (validationError != null) {
                     store.dispatch(AppAction.setStatus(validationError));
                     return;
@@ -590,7 +584,7 @@ public final class UnifiedSpringRadTuiApp {
                         }
                         if (!dependencyCatalog.isEmpty()) {
                             List<String> deps = parseCsv(submitted.textValue("deps"));
-                            List<String> invalid = dependencyCatalog.findInvalid(deps);
+                            List<String> invalid = findUnknownDeps(deps, dependencyCatalog, aliasRegistry);
                             if (!invalid.isEmpty()) {
                                 appendActivity(activity, "Unknown dependencies: " + String.join(", ", invalid));
                                 store.dispatch(AppAction.setStatus("Save failed: unknown deps — " + String.join(", ", invalid)));
@@ -743,7 +737,8 @@ public final class UnifiedSpringRadTuiApp {
         }
     }
 
-    private static String validateProjectForm(FormState formState, DependencyCatalog catalog) {
+    private static String validateProjectForm(FormState formState, DependencyCatalog catalog,
+                                                  DependencyAliasRegistry aliasRegistry) {
         String name = formState.textValue("name");
         if (name == null || name.isBlank()) {
             return "Validation failed: Project name is required";
@@ -762,12 +757,51 @@ public final class UnifiedSpringRadTuiApp {
         }
         if (!catalog.isEmpty()) {
             List<String> deps = parseCsv(formState.textValue("dependencies"));
-            List<String> invalid = catalog.findInvalid(deps);
+            List<String> invalid = findUnknownDeps(deps, catalog, aliasRegistry);
             if (!invalid.isEmpty()) {
                 return "Unknown dependencies: " + String.join(", ", invalid) + " — type to search the catalog";
             }
         }
         return null;
+    }
+
+    /**
+     * Returns dependency IDs that are neither valid Initializr IDs nor known aliases.
+     */
+    private static List<String> findUnknownDeps(List<String> deps, DependencyCatalog catalog,
+                                                 DependencyAliasRegistry aliasRegistry) {
+        List<String> unknown = new ArrayList<>();
+        for (String dep : deps) {
+            if (dep.isBlank()) continue;
+            if (catalog.isValid(dep)) continue;
+            // Check if the alias registry recognizes it (resolve returns the input unchanged for unknown aliases,
+            // but known aliases resolve to different IDs)
+            List<String> resolved = aliasRegistry.resolve(dep);
+            boolean isAlias = !(resolved.size() == 1 && resolved.get(0).equals(dep));
+            if (!isAlias) {
+                unknown.add(dep);
+            }
+        }
+        return unknown;
+    }
+
+    private static FormState buildProjectFormState(List<String> presetNames, List<String> javaVersions,
+                                                      List<String> bootVersions, String defaultName,
+                                                      String defaultArtifact) {
+        return FormState.builder()
+                .selectField("preset", presetNames, 0)
+                .textField("name", defaultName)
+                .textField("groupId", "com.example")
+                .textField("artifactId", defaultArtifact)
+                .selectField("javaVersion", javaVersions, 0)
+                .selectField("bootVersion", bootVersions, 0)
+                .selectField("packaging", List.of("jar", "war"), 0)
+                .selectField("buildTool", List.of("gradle", "maven"), 0)
+                .selectField("authStyle", List.of("jwt", "session", "none"), 0)
+                .selectField("database", List.of("postgresql", "mysql", "h2"), 0)
+                .textField("dependencies", "")
+                .textField("outputDirectory", "./" + defaultArtifact)
+                .build();
     }
 
     private static CliArgs toCliArgs(FormState formState) {
