@@ -193,7 +193,8 @@ public final class NewCommand implements Callable<Integer> {
         reporter.detail("Initializr generation completed");
 
         reporter.step(3, 5, "Applying template overlays and scaffolds");
-        templateOverlayEngine.overlay(config, false, reporter::detail);
+        java.util.Set<String> userFiles = collectUserFiles(config, resolvedPresetName, cliArgs);
+        templateOverlayEngine.overlay(config, false, userFiles, reporter::detail);
         applyUserTemplateLayers(config, resolvedPresetName, cliArgs, reporter);
 
         reporter.step(4, 5, "Initializing git repository");
@@ -203,6 +204,32 @@ public final class NewCommand implements Callable<Integer> {
         reporter.step(5, 5, "Finalizing output");
         reporter.detail("Generation flow complete");
         return config;
+    }
+
+    private java.util.Set<String> collectUserFiles(ProjectConfig config, String resolvedPresetName, CliArgs cliArgs) {
+        if (cliArgs.noUserTemplates()) {
+            return java.util.Set.of();
+        }
+        java.util.List<Path> dirs = resolveUserTemplateDirs(resolvedPresetName, cliArgs);
+        return templateOverlayEngine.scanUserFiles(dirs, config);
+    }
+
+    private java.util.List<Path> resolveUserTemplateDirs(String resolvedPresetName, CliArgs cliArgs) {
+        java.util.List<Path> dirs = new java.util.ArrayList<>();
+        GlobalConfig globalConfig = presetService.globalConfig();
+        Path configDir = presetService.globalConfigLoader().configDirectory();
+
+        if (globalConfig.templateDir() != null) {
+            dirs.add(globalConfig.templateDir());
+        }
+        Preset preset = presetService.findByName(resolvedPresetName).orElse(null);
+        if (preset != null && preset.templateDir() != null && !preset.templateDir().isBlank()) {
+            dirs.add(SpringRadPaths.resolveUserPath(preset.templateDir(), configDir));
+        }
+        if (cliArgs.templateDir() != null && !cliArgs.templateDir().isBlank()) {
+            dirs.add(SpringRadPaths.resolveUserPath(cliArgs.templateDir(), configDir));
+        }
+        return dirs;
     }
 
     private void applyUserTemplateLayers(
@@ -219,19 +246,21 @@ public final class NewCommand implements Callable<Integer> {
         GlobalConfig globalConfig = presetService.globalConfig();
         Path configDir = presetService.globalConfigLoader().configDirectory();
 
-        if (globalConfig.templateDir() != null) {
-            templateOverlayEngine.overlayDirectory(globalConfig.templateDir(), config, true, reporter::detail);
+        // Apply in reverse priority order: CLI > preset > global.
+        // With force=false the first writer wins, so highest-priority goes first.
+        if (cliArgs.templateDir() != null && !cliArgs.templateDir().isBlank()) {
+            Path oneOffTemplateDir = SpringRadPaths.resolveUserPath(cliArgs.templateDir(), configDir);
+            templateOverlayEngine.overlayDirectory(oneOffTemplateDir, config, false, reporter::detail);
         }
 
         Preset preset = presetService.findByName(resolvedPresetName).orElse(null);
         if (preset != null && preset.templateDir() != null && !preset.templateDir().isBlank()) {
             Path presetTemplateDir = SpringRadPaths.resolveUserPath(preset.templateDir(), configDir);
-            templateOverlayEngine.overlayDirectory(presetTemplateDir, config, true, reporter::detail);
+            templateOverlayEngine.overlayDirectory(presetTemplateDir, config, false, reporter::detail);
         }
 
-        if (cliArgs.templateDir() != null && !cliArgs.templateDir().isBlank()) {
-            Path oneOffTemplateDir = SpringRadPaths.resolveUserPath(cliArgs.templateDir(), configDir);
-            templateOverlayEngine.overlayDirectory(oneOffTemplateDir, config, true, reporter::detail);
+        if (globalConfig.templateDir() != null) {
+            templateOverlayEngine.overlayDirectory(globalConfig.templateDir(), config, false, reporter::detail);
         }
     }
 

@@ -453,8 +453,22 @@ public final class UnifiedSpringRadTuiApp {
                         projectGenerator.generate(config);
 
                         Path userTemplateDir = globalConfig.templateDir();
+                        java.util.Set<String> userFiles = userTemplateDir != null
+                                ? templateOverlayEngine.scanUserFiles(java.util.List.of(userTemplateDir), config)
+                                : java.util.Set.of();
                         int totalSteps = userTemplateDir != null ? 6 : 5;
                         int step = 3;
+
+                        int builtinStep = step;
+                        runner().runOnRenderThread(() -> {
+                            appendActivity(activity, "[" + builtinStep + "/" + totalSteps + "] Applying built-in template overlays and scaffolds");
+                            store.dispatch(AppAction.setStatus("Running step " + builtinStep + " of " + totalSteps));
+                            progressStep.set(builtinStep);
+                            progressTotal.set(totalSteps);
+                            progressMessage.set("Applying built-in template overlays");
+                        });
+                        templateOverlayEngine.overlay(config, false, userFiles, detail -> runner().runOnRenderThread(() -> appendActivity(activity, "  - " + detail)));
+                        step++;
 
                         if (userTemplateDir != null) {
                             int s = step;
@@ -469,17 +483,6 @@ public final class UnifiedSpringRadTuiApp {
                                     detail -> runner().runOnRenderThread(() -> appendActivity(activity, "  - " + detail)));
                             step++;
                         }
-
-                        int builtinStep = step;
-                        runner().runOnRenderThread(() -> {
-                            appendActivity(activity, "[" + builtinStep + "/" + totalSteps + "] Applying built-in template overlays and scaffolds");
-                            store.dispatch(AppAction.setStatus("Running step " + builtinStep + " of " + totalSteps));
-                            progressStep.set(builtinStep);
-                            progressTotal.set(totalSteps);
-                            progressMessage.set("Applying built-in template overlays");
-                        });
-                        templateOverlayEngine.overlay(config, false, detail -> runner().runOnRenderThread(() -> appendActivity(activity, "  - " + detail)));
-                        step++;
 
                         int gitStep = step;
                         int finalStep = step + 1;

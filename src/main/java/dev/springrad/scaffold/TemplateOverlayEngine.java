@@ -12,9 +12,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Year;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -38,13 +41,43 @@ public final class TemplateOverlayEngine {
     }
 
     public void overlay(ProjectConfig config, boolean force, Consumer<String> progress) {
+        overlay(config, force, Set.of(), progress);
+    }
+
+    public void overlay(ProjectConfig config, boolean force, Set<String> skipFiles, Consumer<String> progress) {
         Objects.requireNonNull(config, "config");
+        Objects.requireNonNull(skipFiles, "skipFiles");
         Objects.requireNonNull(progress, "progress");
         try (ResolvedRoot resolvedRoot = resolveRoot()) {
-            applyFromRoot(resolvedRoot.path(), config.outputDirectory(), config, force, progress);
+            applyFromRoot(resolvedRoot.path(), config.outputDirectory(), config, force, false, skipFiles, progress);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to overlay templates", e);
         }
+    }
+
+    /**
+     * Scans user template directories and returns the set of rendered output-relative paths
+     * they would produce. Use this to tell {@link #overlay} which files to skip.
+     */
+    public Set<String> scanUserFiles(List<Path> userTemplateDirs, ProjectConfig config) {
+        Set<String> paths = new HashSet<>();
+        for (Path dir : userTemplateDirs) {
+            if (dir == null || !Files.exists(dir) || !Files.isDirectory(dir)) {
+                continue;
+            }
+            try (Stream<Path> stream = Files.walk(dir)) {
+                stream.forEach(path -> {
+                    Path relative = dir.relativize(path);
+                    if (relative.toString().isEmpty() || Files.isDirectory(path)) {
+                        return;
+                    }
+                    paths.add(renderPath(relative, config));
+                });
+            } catch (IOException e) {
+                // best-effort scan; skip dirs we can't read
+            }
+        }
+        return paths;
     }
 
     public void overlayDirectory(Path templateDirectory, ProjectConfig config, boolean force, Consumer<String> progress) {
@@ -62,7 +95,7 @@ public final class TemplateOverlayEngine {
         }
 
         try {
-            applyFromRoot(templateDirectory, config.outputDirectory(), config, force, true, progress);
+            applyFromRoot(templateDirectory, config.outputDirectory(), config, force, true, Set.of(), progress);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to overlay templates from " + templateDirectory, e);
         }
@@ -73,17 +106,8 @@ public final class TemplateOverlayEngine {
             Path targetRoot,
             ProjectConfig config,
             boolean force,
-            Consumer<String> progress
-    ) throws IOException {
-        applyFromRoot(root, targetRoot, config, force, false, progress);
-    }
-
-    private void applyFromRoot(
-            Path root,
-            Path targetRoot,
-            ProjectConfig config,
-            boolean force,
             boolean skipFiltering,
+            Set<String> skipFiles,
             Consumer<String> progress
     ) throws IOException {
         try (Stream<Path> stream = Files.walk(root)) {
@@ -103,6 +127,10 @@ public final class TemplateOverlayEngine {
                     Path target = targetRoot.resolve(renderedRelative);
                     if (Files.isDirectory(path)) {
                         Files.createDirectories(target);
+                        return;
+                    }
+                    if (skipFiles.contains(renderedRelative)) {
+                        progress.accept("User template provided: " + renderedRelative + " (skipping built-in)");
                         return;
                     }
                     if (Files.exists(target) && !force) {
