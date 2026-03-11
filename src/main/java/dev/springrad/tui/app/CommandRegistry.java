@@ -8,24 +8,26 @@ public final class CommandRegistry {
     }
 
     public static final List<CommandDoc> COMMAND_CENTER = List.of(
-            new CommandDoc("/generate", "Open project wizard"),
-            new CommandDoc("/presets", "Open preset manager"),
-            new CommandDoc("/quit", "Exit app (double-enter confirms)"),
+            new CommandDoc("/generate", "Open the project wizard to scaffold a new Spring Boot project"),
+            new CommandDoc("/presets", "Open the preset manager to list, save, or delete presets"),
+            new CommandDoc("/help", "Show available commands and usage tips"),
+            new CommandDoc("/quit", "Exit SpringRad"),
             new CommandDoc("/exit", "Alias for /quit"),
-            new CommandDoc("/theme ocean", "Switch theme to Ocean"),
-            new CommandDoc("/theme graphite", "Switch theme to Graphite"),
-            new CommandDoc("/theme neon", "Switch theme to Neon")
+            new CommandDoc("/theme ocean", "Switch to Ocean theme (cool blues)"),
+            new CommandDoc("/theme graphite", "Switch to Graphite theme (neutral grays)"),
+            new CommandDoc("/theme neon", "Switch to Neon theme (vibrant colors)")
     );
 
     public static final List<CommandDoc> PRESET_MANAGER = List.of(
-            new CommandDoc("/list", "List available presets"),
-            new CommandDoc("/save", "Save/update preset from form fields"),
-            new CommandDoc("/delete", "Delete preset by name"),
-            new CommandDoc("/back", "Return to command center"),
-            new CommandDoc("/quit", "Exit from preset manager"),
+            new CommandDoc("/list", "List all available presets with their configuration"),
+            new CommandDoc("/save", "Save a new preset from the form fields below"),
+            new CommandDoc("/delete", "Delete a preset by name (built-in presets are protected)"),
+            new CommandDoc("/help", "Show available commands and usage tips"),
+            new CommandDoc("/back", "Return to the command center"),
+            new CommandDoc("/quit", "Exit SpringRad"),
             new CommandDoc("/exit", "Alias for /quit"),
-            new CommandDoc("/theme ocean", "Switch theme to Ocean"),
-            new CommandDoc("/theme graphite", "Switch theme to Graphite"),
-            new CommandDoc("/theme neon", "Switch theme to Neon")
+            new CommandDoc("/theme ocean", "Switch to Ocean theme (cool blues)"),
+            new CommandDoc("/theme graphite", "Switch to Graphite theme (neutral grays)"),
+            new CommandDoc("/theme neon", "Switch to Neon theme (vibrant colors)")
     );
 }

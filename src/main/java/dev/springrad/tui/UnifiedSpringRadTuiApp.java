@@ -110,6 +110,8 @@ public final class UnifiedSpringRadTuiApp {
         AtomicBoolean quitArmed = new AtomicBoolean(false);
         AtomicBoolean generationRunning = new AtomicBoolean(false);
         AtomicBoolean awaitingProgressConfirm = new AtomicBoolean(false);
+        AtomicBoolean generationFailed = new AtomicBoolean(false);
+        AtomicReference<String> errorSummary = new AtomicReference<>(null);
         AtomicReference<String> progressTitle = new AtomicReference<>("Project Generation");
         AtomicReference<String> progressMessage = new AtomicReference<>("Preparing...");
         AtomicInteger progressStep = new AtomicInteger(0);
@@ -195,7 +197,7 @@ public final class UnifiedSpringRadTuiApp {
                 if (quitArmed.get()) {
                     return AppShell.render(
                             "Command Center",
-                            "Segmented control surfaces",
+                            "Generate, scaffold, and configure Spring Boot projects",
                             dialog("Confirm Exit",
                                     text(""),
                                     ThemeText.paint("Are you sure you want to quit SpringRad?", selectedTheme.primaryText()),
@@ -216,7 +218,7 @@ public final class UnifiedSpringRadTuiApp {
                                         store.dispatch(AppAction.setStatus("Ready"));
                                     }),
                             "Press ENTER to quit or ESC to cancel",
-                            "Commands: /generate /presets /quit /exit /theme <name>",
+                            "/help for commands, ENTER to confirm, ESC to cancel",
                             selectedTheme,
                             0,
                             terminalRows
@@ -251,6 +253,10 @@ public final class UnifiedSpringRadTuiApp {
                                     store.dispatch(AppAction.navigate(AppRoute.preset_manager));
                                     store.dispatch(AppAction.setStatus("Preset manager"));
                                 }
+                                case "/help" -> {
+                                    quitArmed.set(false);
+                                    store.dispatch(AppAction.setStatus("Type / to browse commands, TAB to autocomplete"));
+                                }
                                 case "/quit", "/exit", "quit" -> {
                                     if (!quitArmed.get()) {
                                         quitArmed.set(true);
@@ -259,7 +265,7 @@ public final class UnifiedSpringRadTuiApp {
                                         quit();
                                     }
                                 }
-                                default -> store.dispatch(AppAction.setStatus("Unknown action"));
+                                default -> store.dispatch(AppAction.setStatus("Unknown command — type /help for a list"));
                             }
                         })
                         .onKeyEvent(event -> {
@@ -285,7 +291,7 @@ public final class UnifiedSpringRadTuiApp {
                 Element body = column(
                         text(""),
                         ThemeText.paint("Generate, scaffold, and configure projects from one place.", selectedTheme.primaryText()),
-                        ThemeText.paint("Type / to open commands. Keep typing to filter.", selectedTheme.mutedText()),
+                        ThemeText.paint("Type / to browse commands. TAB to autocomplete.", selectedTheme.mutedText()),
                         ThemeText.paint("Current theme: " + selectedTheme.label(), selectedTheme.titleAccent()),
                         text(""),
                         actionForm,
@@ -294,10 +300,10 @@ public final class UnifiedSpringRadTuiApp {
 
                 return AppShell.render(
                         "Command Center",
-                        "Segmented control surfaces",
+                        "Generate, scaffold, and configure Spring Boot projects",
                         body,
                         store.state().status(),
-                        "Commands: /generate /presets /quit /exit /theme <name>",
+                        "/help for commands, TAB to autocomplete",
                         selectedTheme,
                         0,
                         terminalRows
@@ -383,8 +389,17 @@ public final class UnifiedSpringRadTuiApp {
                 if (generationRunning.get()) {
                     return;
                 }
+
+                String validationError = validateProjectForm(submitted);
+                if (validationError != null) {
+                    store.dispatch(AppAction.setStatus(validationError));
+                    return;
+                }
+
                 generationRunning.set(true);
                 awaitingProgressConfirm.set(false);
+                generationFailed.set(false);
+                errorSummary.set(null);
                 progressTitle.set("Project Generation");
                 progressStep.set(0);
                 progressTotal.set(0);
@@ -446,6 +461,8 @@ public final class UnifiedSpringRadTuiApp {
                             appendActivity(activity, "Error: " + e.getMessage());
                             store.dispatch(AppAction.setStatus("Failed"));
                             progressMessage.set("Generation failed");
+                            generationFailed.set(true);
+                            errorSummary.set(e.getMessage());
                             awaitingProgressConfirm.set(true);
                         });
                     } finally {
@@ -516,13 +533,14 @@ public final class UnifiedSpringRadTuiApp {
                                         list(activityLines)
                                                 .id("activity-list")
                                                 .scrollbar()
+                                                .scrollToEnd()
                                                 .rounded()
                                                 .borderColor(theme.panelBorder())
                                                 .displayOnly()
                                 ).percent(38)
                         ).spacing(1),
                         store.state().status(),
-                        "Type / then command, ENTER execute, ESC back",
+                        "/help for commands, ENTER execute, ESC back",
                         theme,
                         2,
                         terminalRows
@@ -601,13 +619,14 @@ public final class UnifiedSpringRadTuiApp {
                             store.dispatch(AppAction.setStatus("Delete failed: not found or built-in"));
                         }
                     }
+                    case "/help" -> store.dispatch(AppAction.setStatus("Type / to browse commands, TAB to autocomplete"));
                     case "/back", "back" -> {
                         routeRef.set(AppRoute.command_center);
                         store.dispatch(AppAction.navigate(AppRoute.command_center));
                         store.dispatch(AppAction.setStatus("Returned to command center"));
                     }
                     case "/quit", "/exit", "quit" -> quit();
-                    default -> store.dispatch(AppAction.setStatus("Unknown preset action"));
+                    default -> store.dispatch(AppAction.setStatus("Unknown command — type /help for a list"));
                 }
             }
 
@@ -627,35 +646,51 @@ public final class UnifiedSpringRadTuiApp {
                 int total = progressTotal.get();
                 double ratio = total > 0 ? (double) step / total : 0.0;
 
-                Element statusIndicator = running
-                        ? spinner(SpinnerStyle.DOTS, progressMessage.get()).id("gen-spinner")
-                        : ThemeText.paint(progressMessage.get(), awaiting ? theme.successAccent() : theme.primaryText());
+                boolean failed = generationFailed.get();
+                Element statusIndicator;
+                if (running) {
+                    statusIndicator = spinner(SpinnerStyle.DOTS, progressMessage.get()).id("gen-spinner");
+                } else if (failed) {
+                    statusIndicator = ThemeText.paint("✗ " + progressMessage.get(), theme.errorText());
+                } else {
+                    statusIndicator = ThemeText.paint("✓ " + progressMessage.get(), theme.successAccent());
+                }
 
-                Element confirmHint = awaiting
-                        ? ThemeText.paint("◆ Press ENTER to return to command center", theme.successAccent())
-                        : text("");
+                List<Element> progressItems = new ArrayList<>();
+                progressItems.add(lineGauge(ratio)
+                        .filledColor(failed ? theme.errorText() : theme.successAccent())
+                        .unfilledColor(theme.mutedText())
+                        .label("Step " + step + " / " + total)
+                        .thick()
+                        .id("progress-gauge"));
+                progressItems.add(statusIndicator);
+
+                if (failed && errorSummary.get() != null) {
+                    progressItems.add(panel(" ERROR ",
+                            ThemeText.paint(errorSummary.get(), theme.errorText())
+                    ).rounded().borderColor(theme.errorText()).padding(1));
+                }
+
+                if (awaiting) {
+                    progressItems.add(ThemeText.paint(
+                            "◆ Press ENTER to return to command center",
+                            failed ? theme.errorText() : theme.successAccent()));
+                }
+
+                progressItems.add(text(""));
+                progressItems.add(ThemeText.paint("Execution Log", theme.titleAccent()));
+                progressItems.add(list(activityLines)
+                        .id("activity-list")
+                        .scrollbar()
+                        .scrollToEnd()
+                        .rounded()
+                        .borderColor(theme.panelBorder())
+                        .displayOnly());
 
                 return AppShell.render(
                                 progressTitle.get(),
                                 "Live execution updates",
-                                column(
-                                        lineGauge(ratio)
-                                                .filledColor(theme.successAccent())
-                                                .unfilledColor(theme.mutedText())
-                                                .label("Step " + step + " / " + total)
-                                                .thick()
-                                                .id("progress-gauge"),
-                                        statusIndicator,
-                                        confirmHint,
-                                        text(""),
-                                        ThemeText.paint("Execution Log", theme.titleAccent()),
-                                        list(activityLines)
-                                                .id("activity-list")
-                                                .scrollbar()
-                                                .rounded()
-                                                .borderColor(theme.panelBorder())
-                                                .displayOnly()
-                                ).spacing(1),
+                                column(progressItems.toArray(new Element[0])).spacing(1),
                                 store.state().status(),
                                 "Each sub-step reports progress including file operations",
                                 theme,
@@ -688,6 +723,26 @@ public final class UnifiedSpringRadTuiApp {
             activity.add(message);
             activityLogStore.append(message);
         }
+    }
+
+    private static String validateProjectForm(FormState formState) {
+        String name = formState.textValue("name");
+        if (name == null || name.isBlank()) {
+            return "Validation failed: Project name is required";
+        }
+        String groupId = formState.textValue("groupId");
+        if (groupId != null && !groupId.isBlank() && !groupId.matches("[a-zA-Z][a-zA-Z0-9]*(\\.[a-zA-Z][a-zA-Z0-9]*)*")) {
+            return "Validation failed: Group ID must be a valid Java package (e.g. com.example)";
+        }
+        String artifactId = formState.textValue("artifactId");
+        if (artifactId != null && !artifactId.isBlank() && !artifactId.matches("[a-zA-Z0-9][a-zA-Z0-9._-]*")) {
+            return "Validation failed: Artifact ID contains invalid characters";
+        }
+        String output = formState.textValue("outputDirectory");
+        if (output != null && !output.isBlank() && output.contains("..")) {
+            return "Validation failed: Output directory must not contain '..'";
+        }
+        return null;
     }
 
     private static CliArgs toCliArgs(FormState formState) {
@@ -759,7 +814,7 @@ public final class UnifiedSpringRadTuiApp {
     }
 
     private static String previewLine(String label, String value) {
-        return String.format("%-10s %s", label + ":", value);
+        return String.format("%-12s %s", label + ":", value);
     }
 
     private static String normalizeSlashCommand(String raw) {
