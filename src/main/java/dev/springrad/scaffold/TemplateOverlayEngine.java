@@ -68,7 +68,11 @@ public final class TemplateOverlayEngine {
             try (Stream<Path> stream = Files.walk(dir)) {
                 stream.forEach(path -> {
                     Path relative = dir.relativize(path);
-                    if (relative.toString().isEmpty() || Files.isDirectory(path)) {
+                    String normalized = relative.toString().replace('\\', '/');
+                    if (normalized.isEmpty() || Files.isDirectory(path)) {
+                        return;
+                    }
+                    if (!isAllowedUserFile(normalized)) {
                         return;
                     }
                     paths.add(renderPath(relative, config));
@@ -114,7 +118,11 @@ public final class TemplateOverlayEngine {
             stream.forEach(path -> {
                 try {
                     Path relative = root.relativize(path);
-                    if (relative.toString().isEmpty()) {
+                    String normalized = relative.toString().replace('\\', '/');
+                    if (normalized.isEmpty()) {
+                        return;
+                    }
+                    if (skipFiltering && !Files.isDirectory(path) && !isAllowedUserFile(normalized)) {
                         return;
                     }
                     if (!skipFiltering && shouldSkipTemplate(relative, config)) {
@@ -197,6 +205,28 @@ public final class TemplateOverlayEngine {
 
     private static String packageName(String groupId, String artifactId) {
         return groupId + "." + artifactId.replace('-', '.');
+    }
+
+    /**
+     * Allowlist of top-level entries permitted when copying from a user template directory.
+     * Anything outside these prefixes is silently skipped so that pointing at an existing
+     * Spring Boot project doesn't copy build output, IDE files, or VCS metadata.
+     */
+    private static final List<String> ALLOWED_USER_PREFIXES = List.of(
+            "src/",
+            "config/",
+            "docker-compose",
+            "Dockerfile",
+            ".env"
+    );
+
+    static boolean isAllowedUserFile(String normalizedRelative) {
+        for (String prefix : ALLOWED_USER_PREFIXES) {
+            if (normalizedRelative.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isBinary(byte[] bytes) {

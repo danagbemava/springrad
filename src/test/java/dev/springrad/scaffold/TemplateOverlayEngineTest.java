@@ -655,6 +655,79 @@ class TemplateOverlayEngineTest {
         assertFalse(Files.exists(output.resolve("src/main/resources/logback-spring.xml")));
     }
 
+    @Test
+    void overlayDirectory_copiesAllowedFilesOnly() throws Exception {
+        Path userDir = tempDir.resolve("user-project");
+        // allowed
+        Files.createDirectories(userDir.resolve("src/main/java/com/example"));
+        Files.writeString(userDir.resolve("src/main/java/com/example/App.java"), "user code");
+        Files.writeString(userDir.resolve("Dockerfile"), "FROM openjdk:21");
+        Files.writeString(userDir.resolve(".env"), "KEY=val");
+        Files.writeString(userDir.resolve("docker-compose.yml"), "services:");
+        Files.createDirectories(userDir.resolve("config"));
+        Files.writeString(userDir.resolve("config/application.yml"), "spring: {}");
+        // not allowed
+        Files.writeString(userDir.resolve("build.gradle"), "plugins {}");
+        Files.writeString(userDir.resolve("pom.xml"), "<project/>");
+        Files.writeString(userDir.resolve("settings.gradle"), "rootProject.name = 'x'");
+        Files.writeString(userDir.resolve("gradlew"), "#!/bin/sh");
+        Files.writeString(userDir.resolve("README.md"), "# readme");
+        Files.createDirectories(userDir.resolve("build/classes"));
+        Files.writeString(userDir.resolve("build/classes/App.class"), "bytecode");
+        Files.createDirectories(userDir.resolve("target"));
+        Files.writeString(userDir.resolve("target/app.jar"), "jar");
+        Files.createDirectories(userDir.resolve(".idea"));
+        Files.writeString(userDir.resolve(".idea/workspace.xml"), "<xml/>");
+        Files.createDirectories(userDir.resolve(".git"));
+        Files.writeString(userDir.resolve(".git/HEAD"), "ref: refs/heads/main");
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(tempDir.resolve("empty-templates"));
+        Path output = tempDir.resolve("out");
+        Files.createDirectories(output);
+        engine.overlayDirectory(userDir, config(output), false, msg -> {});
+
+        // allowed files present
+        assertTrue(Files.exists(output.resolve("src/main/java/com/example/App.java")));
+        assertTrue(Files.exists(output.resolve("Dockerfile")));
+        assertTrue(Files.exists(output.resolve(".env")));
+        assertTrue(Files.exists(output.resolve("docker-compose.yml")));
+        // config/application.yml gets remapped to src/main/resources/application.yml
+        assertTrue(Files.exists(output.resolve("src/main/resources/application.yml")));
+
+        // disallowed files absent
+        assertFalse(Files.exists(output.resolve("build.gradle")));
+        assertFalse(Files.exists(output.resolve("pom.xml")));
+        assertFalse(Files.exists(output.resolve("settings.gradle")));
+        assertFalse(Files.exists(output.resolve("gradlew")));
+        assertFalse(Files.exists(output.resolve("README.md")));
+        assertFalse(Files.exists(output.resolve("build/classes/App.class")));
+        assertFalse(Files.exists(output.resolve("target/app.jar")));
+        assertFalse(Files.exists(output.resolve(".idea/workspace.xml")));
+        assertFalse(Files.exists(output.resolve(".git/HEAD")));
+    }
+
+    @Test
+    void isAllowedUserFile_checksAllowlist() {
+        assertTrue(TemplateOverlayEngine.isAllowedUserFile("src/main/java/Foo.java"));
+        assertTrue(TemplateOverlayEngine.isAllowedUserFile("src/test/resources/test.yml"));
+        assertTrue(TemplateOverlayEngine.isAllowedUserFile("config/application-dev.yml"));
+        assertTrue(TemplateOverlayEngine.isAllowedUserFile("Dockerfile"));
+        assertTrue(TemplateOverlayEngine.isAllowedUserFile("docker-compose.yml"));
+        assertTrue(TemplateOverlayEngine.isAllowedUserFile("docker-compose.kafka.yml"));
+        assertTrue(TemplateOverlayEngine.isAllowedUserFile(".env"));
+        assertTrue(TemplateOverlayEngine.isAllowedUserFile(".env.example"));
+
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("build.gradle"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("pom.xml"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("gradlew"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("build/classes/App.class"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("target/app.jar"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile(".idea/workspace.xml"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile(".git/HEAD"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("README.md"));
+        assertFalse(TemplateOverlayEngine.isAllowedUserFile("settings.gradle"));
+    }
+
     private static ProjectConfig config(Path output) {
         return config(output, ProjectConfig.AuthStyle.jwt, List.of());
     }
