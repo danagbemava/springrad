@@ -62,7 +62,7 @@ public final class TemplateOverlayEngine {
         }
 
         try {
-            applyFromRoot(templateDirectory, config.outputDirectory(), config, force, progress);
+            applyFromRoot(templateDirectory, config.outputDirectory(), config, true, true, progress);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to overlay templates from " + templateDirectory, e);
         }
@@ -75,6 +75,17 @@ public final class TemplateOverlayEngine {
             boolean force,
             Consumer<String> progress
     ) throws IOException {
+        applyFromRoot(root, targetRoot, config, force, false, progress);
+    }
+
+    private void applyFromRoot(
+            Path root,
+            Path targetRoot,
+            ProjectConfig config,
+            boolean force,
+            boolean skipFiltering,
+            Consumer<String> progress
+    ) throws IOException {
         try (Stream<Path> stream = Files.walk(root)) {
             stream.forEach(path -> {
                 try {
@@ -82,7 +93,7 @@ public final class TemplateOverlayEngine {
                     if (relative.toString().isEmpty()) {
                         return;
                     }
-                    if (shouldSkipTemplate(relative, config)) {
+                    if (!skipFiltering && shouldSkipTemplate(relative, config)) {
                         if (!Files.isDirectory(path)) {
                             progress.accept("Skipping template: " + relative);
                         }
