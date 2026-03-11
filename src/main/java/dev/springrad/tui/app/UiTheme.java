@@ -6,9 +6,9 @@ import java.util.List;
 import java.util.Locale;
 
 public enum UiTheme {
-    ocean("Ocean", Color.CYAN, Color.LIGHT_CYAN, Color.MAGENTA, Color.YELLOW, Color.GREEN, Color.WHITE, Color.GRAY),
-    graphite("Graphite", Color.WHITE, Color.GRAY, Color.CYAN, Color.YELLOW, Color.GREEN, Color.WHITE, Color.GRAY),
-    neon("Neon", Color.MAGENTA, Color.CYAN, Color.LIGHT_CYAN, Color.YELLOW, Color.GREEN, Color.WHITE, Color.GRAY);
+    ocean("Ocean", Color.CYAN, Color.LIGHT_CYAN, Color.MAGENTA, Color.YELLOW, Color.GREEN, Color.WHITE, Color.GRAY, Color.LIGHT_RED),
+    graphite("Graphite", Color.WHITE, Color.GRAY, Color.CYAN, Color.YELLOW, Color.GREEN, Color.WHITE, Color.GRAY, Color.RED),
+    neon("Neon", Color.MAGENTA, Color.CYAN, Color.LIGHT_CYAN, Color.YELLOW, Color.GREEN, Color.WHITE, Color.GRAY, Color.LIGHT_RED);
 
     private final String label;
     private final Color panelBorder;
@@ -18,6 +18,7 @@ public enum UiTheme {
     private final Color successAccent;
     private final Color primaryText;
     private final Color mutedText;
+    private final Color errorText;
 
     UiTheme(
             String label,
@@ -27,7 +28,8 @@ public enum UiTheme {
             Color statusAccent,
             Color successAccent,
             Color primaryText,
-            Color mutedText
+            Color mutedText,
+            Color errorText
     ) {
         this.label = label;
         this.panelBorder = panelBorder;
@@ -37,6 +39,7 @@ public enum UiTheme {
         this.successAccent = successAccent;
         this.primaryText = primaryText;
         this.mutedText = mutedText;
+        this.errorText = errorText;
     }
 
     public static UiTheme fromValue(String value) {
@@ -84,5 +87,9 @@ public enum UiTheme {
 
     public Color mutedText() {
         return mutedText;
+    }
+
+    public Color errorText() {
+        return errorText;
     }
 }
