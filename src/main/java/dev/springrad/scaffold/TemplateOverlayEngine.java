@@ -98,6 +98,12 @@ public final class TemplateOverlayEngine {
             return;
         }
 
+        if (!hasAllowedFiles(templateDirectory)) {
+            progress.accept("Warning: no recognized template files found in " + templateDirectory
+                    + " (expected src/, config/, Dockerfile, docker-compose*, or .env*)");
+            return;
+        }
+
         try {
             applyFromRoot(templateDirectory, config.outputDirectory(), config, force, true, Set.of(), progress);
         } catch (IOException e) {
@@ -219,6 +225,20 @@ public final class TemplateOverlayEngine {
             "Dockerfile",
             ".env"
     );
+
+    private static boolean hasAllowedFiles(Path directory) {
+        try (Stream<Path> stream = Files.walk(directory)) {
+            return stream.anyMatch(path -> {
+                if (Files.isDirectory(path)) {
+                    return false;
+                }
+                String relative = directory.relativize(path).toString().replace('\\', '/');
+                return !relative.isEmpty() && isAllowedUserFile(relative);
+            });
+        } catch (IOException e) {
+            return false;
+        }
+    }
 
     static boolean isAllowedUserFile(String normalizedRelative) {
         for (String prefix : ALLOWED_USER_PREFIXES) {

@@ -707,6 +707,25 @@ class TemplateOverlayEngineTest {
     }
 
     @Test
+    void overlayDirectory_warnsWhenNoAllowedFilesFound() throws Exception {
+        Path randomDir = tempDir.resolve("random-stuff");
+        Files.createDirectories(randomDir);
+        Files.writeString(randomDir.resolve("notes.txt"), "some notes");
+        Files.writeString(randomDir.resolve("todo.md"), "# TODO");
+        Files.createDirectories(randomDir.resolve("data"));
+        Files.writeString(randomDir.resolve("data/dump.csv"), "a,b,c");
+
+        TemplateOverlayEngine engine = new TemplateOverlayEngine(tempDir.resolve("empty-templates"));
+        Path output = tempDir.resolve("out");
+        Files.createDirectories(output);
+        java.util.List<String> messages = new java.util.ArrayList<>();
+        engine.overlayDirectory(randomDir, config(output), false, messages::add);
+
+        assertEquals(1, messages.size());
+        assertTrue(messages.get(0).contains("no recognized template files"));
+    }
+
+    @Test
     void isAllowedUserFile_checksAllowlist() {
         assertTrue(TemplateOverlayEngine.isAllowedUserFile("src/main/java/Foo.java"));
         assertTrue(TemplateOverlayEngine.isAllowedUserFile("src/test/resources/test.yml"));
